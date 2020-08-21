@@ -18,9 +18,6 @@ absolute_path = os.path.abspath(__file__)
 directory_name = os.path.dirname(absolute_path)
 os.chdir(directory_name)
 
-def generate_random_data():
-    return 0.1*np.random.randn(3, 50)+np.random.uniform()
-
 mismatch_stds = [0.05, 0.2, 0.3]
 architectures = ["force", "bptt", "reservoir", "ads"]
 label_architectures = ["FORCE", "BPTT", "Reservoir", "Network ADS"]
@@ -32,14 +29,11 @@ for architecture in architectures:
     path_original = path + "_test_accuracies.npy"
     path_mismatch = path + "_test_accuracies_mismatch.npy"
 
-    # with open(path_original, 'rb') as f:
-    #     data_original = np.load(f)
+    with open(path_original, 'rb') as f:
+        data_original = np.load(f)
 
-    # with open(path_mismatch, 'rb') as f:
-    #     data_mismatch = np.load(f)
-
-    data_original = generate_random_data()
-    data_mismatch = generate_random_data()
+    with open(path_mismatch, 'rb') as f:
+        data_mismatch = np.load(f)
 
     data_full[architecture] = [data_original, data_mismatch]
 
@@ -49,7 +43,7 @@ gs = fig.add_gridspec(len(mismatch_stds),len(architectures))
 
 ort = "h" # - Orientation
 pal = "Set2" # - Color
-sigma = .2 # - Smoothing of the curve
+sigma = .4 # - Smoothing of the curve
 
 for idx_architecture, architecture in enumerate(architectures):
 
@@ -68,8 +62,9 @@ for idx_architecture, architecture in enumerate(architectures):
         ax.set_yticks([])
 
         ax.set_xlabel("")
+        ax.set_xlim([0.3,1.0])
         if(idx_architecture == 0):
-            ax.set_ylabel(r"$\sigma$ " + str(mismatch_stds[idx_std]))
+            ax.set_ylabel(r"$\sigma$: " + str(int(100*mismatch_stds[idx_std])) + r"\%")
         else:
             ax.set_ylabel("")
 

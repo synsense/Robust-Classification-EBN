@@ -26,7 +26,6 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 import argparse
 from typing import List, Dict
-from copy import deepcopy
 
 @jit
 def loss_mse_reg_stack(
@@ -316,10 +315,13 @@ class HeySnipsNetworkADS(BaseModel):
 
             if(val_acc >= self.best_val_acc):
                 self.best_val_acc = val_acc
-                self.best_model = deepcopy(self.net)
+                self.best_model = self.net
 
                 # - Save model
                 self.save(os.path.join(self.base_path, self.network_name))
+
+                if(val_acc > 0.87):
+                    return
 
         # - End for epoch
     # - End train

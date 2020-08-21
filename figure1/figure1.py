@@ -440,8 +440,7 @@ class TemporalXORNetwork:
         correct = 0
         correct_rate = 0
         counter = 0
-        # - For recording
-        recorded = np.zeros(4)
+
         for batch_id in range(self.num_test):
 
             if(self.dry_run):
@@ -484,50 +483,6 @@ class TemporalXORNetwork:
             if(predicted_label_rate == tgt_label):
                 correct_rate += 1
             counter += 1
-
-            # - Save data for plotting
-            if(recorded[input_label]==0):
-                v = self.net.lyrRes.recorded_states["v"]
-                vt = self.net.lyrRes.recorded_states["vt"]
-                # - Save input, target, final output
-                base_string = os.path.join(self.base_path, "Resources/Plotting/")
-                fn = os.path.join(base_string, ("final_out_%d.npy" % input_label))
-                with open(fn, "wb") as f:
-                    np.save(f, final_out)
-                fn =  os.path.join(base_string, ("target_%d.npy" % input_label))
-                with open(fn, "wb") as f:
-                    np.save(f, target)
-                fn =  os.path.join(base_string, ("input_%d.npy" % input_label))
-                with open(fn, "wb") as f:
-                    np.save(f, data)
-                
-                # - Store reconstructed and target dynamics
-                fn =  os.path.join(base_string, "reconstructed_dynamics.npy")
-                with open(fn, "wb") as f:
-                    np.save(f, out_val)
-                fn =  os.path.join(base_string, "target_dynamics.npy")
-                with open(fn, "wb") as f:
-                    np.save(f, ts_rate_net_target_dynamics.samples)
-                
-                # - Store voltages and voltage recording times
-                fn =  os.path.join(base_string, "v.npy")
-                with open(fn, "wb") as f:
-                    np.save(f, v)
-                fn =  os.path.join(base_string, "vt.npy")
-                with open(fn, "wb") as f:
-                    np.save(f, vt)
-
-                # - Store spike times and indices
-                channels = val_sim["lyrRes"].channels[val_sim["lyrRes"].channels >= 0]
-                times_tmp = val_sim["lyrRes"].times[val_sim["lyrRes"].channels >= 0]
-                fn = os.path.join(base_string, "spike_channels.npy")
-                with open(fn, 'wb') as f:
-                    np.save(f, channels)
-                fn = os.path.join(base_string, "spike_times.npy")
-                with open(fn, 'wb') as f:
-                    np.save(f, times_tmp) 
-                
-                recorded[input_label] = 1
 
             if(self.verbose > 0):
                 plt.clf()

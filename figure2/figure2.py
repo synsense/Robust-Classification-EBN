@@ -515,7 +515,6 @@ class HeySnipsNetworkADS(BaseModel):
         correct = 0
         correct_rate = 0
         counter = 0
-        got_pos = got_neg = False
 
         for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
 
@@ -546,7 +545,7 @@ class HeySnipsNetworkADS(BaseModel):
                     self.best_model.lyrRes.ts_target = batched_rate_net_dynamics[idx] # - Needed for plotting
 
                 # - Evolve...
-                test_sim = self.best_model.evolve(ts_input=ts_spiking_in, verbose=not (got_neg and got_pos))
+                test_sim = self.best_model.evolve(ts_input=ts_spiking_in, verbose=self.verbose)
                 self.best_model.reset_all()
 
                 # - Get the output
@@ -597,49 +596,6 @@ class HeySnipsNetworkADS(BaseModel):
                 if(predicted_label_rate == target_labels[idx]):
                     correct_rate += 1
                 counter += 1
-
-
-                # - Save a bunch of data for plotting
-                if(target_labels[idx] == 1 and predicted_label == 1 and predicted_label_rate == 1 and not got_pos):
-                    got_pos = True
-                    # - Save voltages, rate dynamics, recon dynamics, rate output, spiking output, fast and slow matrix, raw input, filtered input
-                    v = self.best_model.lyrRes.recorded_states["v"]
-                    times = self.best_model.lyrRes.recorded_states["vt"]
-                    with open('Resources/Plotting/v.npy', 'wb') as f:
-                        np.save(f, v)
-                    with open('Resources/Plotting/times.npy', 'wb') as f:
-                        np.save(f, times)
-                    with open('Resources/Plotting/target_dynamics.npy', 'wb') as f:
-                        np.save(f, batched_rate_net_dynamics[idx].T)
-                    with open('Resources/Plotting/recon_dynamics.npy', 'wb') as f:
-                        np.save(f, out_test.T)
-                    with open('Resources/Plotting/rate_output.npy', 'wb') as f:
-                        np.save(f, batched_rate_output[idx])
-                    with open('Resources/Plotting/spiking_output.npy', 'wb') as f:
-                        np.save(f, final_out)
-                    with open('Resources/Plotting/omega_f.npy', 'wb') as f:
-                        np.save(f, self.best_model.lyrRes.weights_fast)
-                    with open('Resources/Plotting/omega_s.npy', 'wb') as f:
-                        np.save(f, self.best_model.lyrRes.weights_slow)
-                    with open('Resources/Plotting/audio_raw.npy', 'wb') as f:
-                        np.save(f, batched_audio_raw[idx])
-                    with open('Resources/Plotting/filtered_audio.npy', 'wb') as f:
-                        np.save(f, filtered[idx])
-                    
-                    channels = test_sim["lyrRes"].channels[test_sim["lyrRes"].channels >= 0]
-                    times_tmp = test_sim["lyrRes"].times[test_sim["lyrRes"].channels >= 0]
-                    with open('Resources/Plotting/spike_channels.npy', 'wb') as f:
-                        np.save(f, channels)
-                    with open('Resources/Plotting/spike_times.npy', 'wb') as f:
-                        np.save(f, times_tmp)
-
-                elif(target_labels[idx] == 0 and predicted_label_rate == 0 and predicted_label == 0 and not got_neg):
-                    got_neg = True
-                    with open('Resources/Plotting/rate_output_false.npy', 'wb') as f:
-                        np.save(f, batched_rate_output[idx])
-                    with open('Resources/Plotting/spiking_output_false.npy', 'wb') as f:
-                        np.save(f, final_out)
-
 
                 print("--------------------------------", flush=True)
                 print("TESTING batch", batch_id, flush=True)

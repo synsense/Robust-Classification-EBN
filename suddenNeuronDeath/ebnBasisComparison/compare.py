@@ -217,8 +217,9 @@ class HeySnipsNetworkADS(BaseModel):
                 # - ..and filter
                 final_out_ebn = filter_1d(final_out_ebn, alpha=0.95)
                 final_out_no_ebn = filter_1d(final_out_no_ebn, alpha=0.95)
-                final_out_ebn_perturbed = filter_1d(final_out_ebn_perturbed, alpha=0.95)
-                final_out_no_ebn_perturbed = filter_1d(final_out_no_ebn_perturbed, alpha=0.95)
+                # - Apply global gain
+                final_out_ebn_perturbed = 1.4*filter_1d(final_out_ebn_perturbed, alpha=0.95)
+                final_out_no_ebn_perturbed = 1.4*filter_1d(final_out_no_ebn_perturbed, alpha=0.95)
 
                 # - ..compute the errors
                 error_ebn = np.sum(np.var(batched_rate_net_dynamics[idx]-out_test_ebn, axis=0, ddof=1)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0, ddof=1)))

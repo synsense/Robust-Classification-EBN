@@ -6,7 +6,7 @@ cd ~/Documents/RobustClassificationWithEBNs/mismatch
 NUM_NEURONS_BPTT=768
 
 echo "Training BPTT version with ${NUM_NEURONS_BPTT} neurons..."
-python BPTT/hey_snips_bptt.py --num ${NUM_NEURONS_BPTT} --epochs 4 --threshold 0.7 --verbose 1 --percentage-data 1.0
+python BPTT/hey_snips_bptt.py --num ${NUM_NEURONS_BPTT} --epochs 10 --threshold 0.7 --verbose 1 --percentage-data 1.0
 echo "Evaluating mismatch robustness of BPTT network..."
 python BPTT/hey_snips_bptt_mismatch.py --verbose 0 --percentage-data 1.0 --num-trials 50
 echo "Training reservoir network..."

@@ -73,10 +73,9 @@ class HeySnipsNetworkADS(BaseModel):
         self.N_out = self.w_out.shape[1]
 
         # - Create NetworkADS
-        model_path_ads_net_original = os.path.join("../Resources/hey_snips_fast_old.json")
-        model_path_ads_net_no_fast = os.path.join("../../figure2/Resources/hey_snips.json")
+        model_path_ads_net_original = os.path.join("../Resources/hey_snips_fast.json")
 
-        if(os.path.exists(model_path_ads_net_original) and os.path.exists(model_path_ads_net_no_fast)):
+        if(os.path.exists(model_path_ads_net_original)):
             print("Loading networks...")
 
             # - NOTE: We assume the models to have the same tau_mem and the same number of neurons
@@ -90,8 +89,8 @@ class HeySnipsNetworkADS(BaseModel):
                 self.bb_original = loaddict["best_boundary"]
                 self.t0_original = loaddict["threshold0"]
 
-            self.net_mismatch = NetworkADS.load(model_path_ads_net_no_fast)
-            with open(model_path_ads_net_no_fast, "r") as f:
+            self.net_mismatch = NetworkADS.load(model_path_ads_net_original)
+            with open(model_path_ads_net_original, "r") as f:
                 loaddict = json.load(f)
                 self.bb_mismatch = loaddict["best_boundary"]
                 self.t0_mismatch = loaddict["threshold0"]
@@ -237,11 +236,13 @@ class HeySnipsNetworkADS(BaseModel):
                     plt.draw()
                     plt.pause(0.001)
 
-                if(predicted_label_mismatch == predicted_label_original == predicted_label_perturbed == target_labels[idx] == 1 and not already_saved):
+                if(predicted_label_mismatch == predicted_label_original == target_labels[idx] == 1 and not already_saved):
                     already_saved = True
                     # - Save data...
                     with open('../Resources/Plotting/target_dynamics.npy', 'wb') as f:
                         np.save(f, batched_rate_net_dynamics[idx])
+                    with open('../Resources/Plotting/target_signal.npy', 'wb') as f:
+                        np.save(f, tgt_signals[idx])
                     with open('../Resources/Plotting/recon_dynamics_original.npy', 'wb') as f:
                         np.save(f, out_test_original)
                     with open('../Resources/Plotting/recon_dynamics_mismatch.npy', 'wb') as f:
@@ -301,7 +302,7 @@ if __name__ == "__main__":
     experiment = HeySnipsDEMAND(batch_size=batch_size,
                             percentage=1.0,
                             snr=snr,
-                            randomize_after_epoch=True,
+                            randomize_after_epoch=False,
                             downsample=1000,
                             is_tracking=False,
                             one_hot=False)

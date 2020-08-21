@@ -16,14 +16,11 @@ os.chdir(directory_name)
 #### General format: Time x Features (e.g. 5000 x 128)
 duration = 5.0
 
-with open('Resources/Plotting/v.npy', 'rb') as f:
-    v = np.load(f).T
-    print("V",v.shape)
-with open('Resources/Plotting/times.npy', 'rb') as f:
-    times = np.load(f)
-    print("Times",times.shape)
 with open('Resources/Plotting/target_dynamics.npy', 'rb') as f:
     target_val = np.load(f).T
+    print("target_val",target_val.shape)
+with open('Resources/Plotting/target_signal.npy', 'rb') as f:
+    target_signal = np.load(f).ravel()
     print("target_val",target_val.shape)
 with open('Resources/Plotting/recon_dynamics.npy', 'rb') as f:
     out_val = np.load(f).T
@@ -35,8 +32,6 @@ with open('Resources/Plotting/rate_output.npy', 'rb') as f:
 with open('Resources/Plotting/spiking_output.npy', 'rb') as f:
     final_out = np.load(f)
     print("final_out",final_out.shape)
-# with open('Resources/Plotting/target_out.npy', 'rb') as f:
-#     target_out = np.load(f)
 with open('Resources/Plotting/omega_f.npy', 'rb') as f:
     omega_f = np.load(f)
     print("omega_f",omega_f.shape)
@@ -95,7 +90,7 @@ ax0.set_ylim([-1.5,plot_num*0.2+1.5])
 lines = [l1[0],l2[0]]
 ax0.legend(lines, [r"Raw audio", r"Filtered audio"], frameon=False, loc=4, prop={'size': 7})
 
-ax1 = fig.add_subplot(gs[2:4,0])
+ax1 = fig.add_subplot(gs[2:5,0])
 plot_num = 8
 stagger_target_dyn = np.ones((target_val.shape[0],plot_num))
 for i in range(plot_num):
@@ -124,7 +119,7 @@ ax1.set_ylim([-1,plot_num*0.5+1.0])
 ax1.set_xlim([t_start_dynamics, t_stop])
 ax1.text(x=t_start_dynamics+0.01, y=plot_num*0.5, s="B", fontsize=16, fontstyle="oblique")
 
-ax2 = fig.add_subplot(gs[4:6,0])
+ax2 = fig.add_subplot(gs[5:6,0])
 ax2.scatter(spike_times[(spike_times > t_start_dynamics) & (spike_times < t_stop)], spike_channels[(spike_times > t_start_dynamics) & (spike_times < t_stop)], color="k", linewidths=0.0)
 ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
@@ -143,6 +138,7 @@ time_base = np.arange(t_start, t_stop, 0.001)
 ax3 = fig.add_subplot(gs[6,0])
 ax3.plot(time_base, scale*rate_output[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C2", label=r"$\mathbf{y}_{\textnormal{rate}}$")
 ax3.plot(time_base, scale*final_out[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C4", linestyle="--", label=r"$\mathbf{y}_{\textnormal{spiking}}$")
+ax3.plot(time_base, scale*target_signal[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C8", linestyle="dotted", label=r"$\mathbf{y}_{\textnormal{true}}$")
 ax3.legend(frameon=False, loc=1, prop={'size': 7})
 ax3.set_ylim([-0.4,1.8])
 ax3.spines["top"].set_visible(False)
@@ -156,6 +152,7 @@ ax3.text(x=t_start+0.01, y=0.9, s="D", fontsize=16, fontstyle="oblique")
 ax4 = fig.add_subplot(gs[7,0])
 ax4.plot(time_base, scale*rate_output_false[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C2", linestyle="--")
 ax4.plot(time_base, scale*final_out_false[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C4")
+ax4.plot([t_start,t_stop],[0,0], linestyle="dotted", color="C8")
 ax4.set_ylim([-0.4,1.8])
 ax4.spines["top"].set_visible(False)
 ax4.spines["right"].set_visible(False)

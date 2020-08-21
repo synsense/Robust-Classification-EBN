@@ -18,6 +18,8 @@ duration = 5.0
 
 with open('../Resources/Plotting/spike_channels_original.npy', 'rb') as f:
     spike_channels_original = np.load(f)
+with open('../Resources/Plotting/target_signal.npy', 'rb') as f:
+    target_signal = np.load(f).ravel()
 with open('../Resources/Plotting/spike_times_original.npy', 'rb') as f:
     spike_times_original = np.load(f)
 with open('../Resources/Plotting/spike_channels_perturbed.npy', 'rb') as f:
@@ -57,7 +59,7 @@ with open('../Resources/Plotting/audio_raw.npy', 'rb') as f:
 
 
 t_start = 1.8
-t_stop = 3.3
+t_stop = 3.4
 t_start_suppress = 2.2
 t_stop_suppress = 3.0
 
@@ -198,6 +200,7 @@ time_base = np.arange(t_start, t_stop, 0.001)
 ax9 = fig.add_subplot(gs[10:12,:2])
 ax9.plot(time_base, rate_output[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C2", label=r"$\mathbf{y}_{\textnormal{rate}}$")
 ax9.plot(time_base, final_out_original[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C4", linestyle="--", label=r"$\mathbf{y}_{\textnormal{spiking}}$")
+ax9.plot(time_base, target_signal[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C8", linestyle="dotted", label=r"$\mathbf{y}_{\textnormal{target}}$")
 ax9.legend(frameon=False, loc=2, prop={'size': 5})
 ax9.set_ylim([-0.4,1.4])
 ax9.spines["top"].set_visible(False)
@@ -210,6 +213,7 @@ ax9.set_yticks([])
 ax10 = fig.add_subplot(gs[10:12,2:4])
 ax10.plot(time_base, rate_output[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C2")
 ax10.plot(time_base, final_out_mismatch[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C4", linestyle="--")
+ax10.plot(time_base, target_signal[int(t_start/0.001):int(t_start/0.001)+len(time_base)], color="C8", linestyle="dotted")
 ax10.set_ylim([-0.4,1.4])
 ax10.spines["top"].set_visible(False)
 ax10.spines["right"].set_visible(False)
@@ -222,6 +226,7 @@ ax11 = fig.add_subplot(gs[10:,4])
 tmp_times = np.arange(0,duration,duration/len(rate_output))
 ax11.plot(tmp_times[(tmp_times > t_start) & (tmp_times < t_stop)], rate_output[(tmp_times > t_start) & (tmp_times < t_stop)], color="C2")
 ax11.plot(tmp_times[(tmp_times > t_start) & (tmp_times < t_stop)], final_out_perturbed[(tmp_times > t_start) & (tmp_times < t_stop)], color="C4", linestyle="--")
+ax11.plot(tmp_times[(tmp_times > t_start) & (tmp_times < t_stop)], target_signal[(tmp_times > t_start) & (tmp_times < t_stop)], color="C8", linestyle="dotted")
 ax11.set_ylim([-0.8,1.0])
 ax11.plot([t_start_suppress,t_start_suppress],[-0.1, 1.0], color="r")
 ax11.plot([t_stop_suppress,t_stop_suppress],[-0.1, 1.0], color="r")

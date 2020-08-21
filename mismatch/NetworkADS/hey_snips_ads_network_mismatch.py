@@ -90,7 +90,6 @@ class HeySnipsNetworkADS(BaseModel):
         if(os.path.exists(model_path_ads_net_full)):
             print("Loading networks...")
 
-            # - NOTE: We assume the models to have the same tau_mem and the same number of neurons
             self.net_full = NetworkADS.load(model_path_ads_net_full)
             self.Nc = self.net_full.lyrRes.weights_in.shape[0]
             self.amplitude = 50 / np.mean(self.net_full.lyrRes.tau_mem) 
@@ -255,7 +254,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--num-trials', default=10, type=int, help="Number of trials this experiment is repeated")
+    parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']

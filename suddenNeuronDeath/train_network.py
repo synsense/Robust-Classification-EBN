@@ -135,7 +135,7 @@ class HeySnipsNetworkADS(BaseModel):
             self.tau_slow = tau_slow
             self.tau_out = tau_out
 
-            tau_syn_fast = tau_slow
+            tau_syn_fast = 0.001
             mu = 0.0005
             nu = 0.0001
             D = np.random.randn(self.Nc,self.num_neurons) / self.Nc
@@ -181,7 +181,7 @@ class HeySnipsNetworkADS(BaseModel):
                                             Nb=self.num_neurons,
                                             weights_in=weights_in_realistic * self.tau_mem,
                                             weights_out= 0.5*weights_out_realistic,
-                                            weights_fast= - weights_fast_realistic / tau_syn_fast * 5,
+                                            weights_fast= - weights_fast_realistic / tau_syn_fast * 10,
                                             weights_slow = weights_slow,
                                             eta=eta,
                                             k=k,

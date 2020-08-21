@@ -74,9 +74,9 @@ you should delete/rename the network ```suddenNeuronDeath/Resources/hey_snips_fa
 Output:
 
 ```
-Test accuracy: ebn: 0.8490 No EBN: 0.8730 EBN Pert: 0.8290 No EBN Pert: 0.4820 Rate: 0.9130
-Average drop in reconstruction error: EBN: 0.4445 No EBN: 1.4140
-Average reconstruction error: EBN: 4.6514 No EBN: 4.5796 EBN Pert.: 5.0959 No EBN Pert.: 5.9936
+Test accuracy: ebn: 0.8840 No EBN: 0.8730 EBN Pert: 0.7990 No EBN Pert: 0.5900 Rate: 0.9130
+Average drop in reconstruction error: EBN: 1.0594 No EBN: 1.4140
+Average reconstruction error: EBN: 4.3743 No EBN: 4.5796 EBN Pert.: 5.4338 No EBN Pert.: 5.9936
 ```
 
 #### Figure 3

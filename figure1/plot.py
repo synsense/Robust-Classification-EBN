@@ -44,6 +44,15 @@ with open('Resources/Plotting/target_2.npy', 'rb') as f:
 with open('Resources/Plotting/target_3.npy', 'rb') as f:
     target_3 = np.load(f)
 
+with open('Resources/Plotting/rate_0.npy', 'rb') as f:
+    rate_0 = np.load(f).ravel()
+with open('Resources/Plotting/rate_1.npy', 'rb') as f:
+    rate_1 = np.load(f).ravel()
+with open('Resources/Plotting/rate_2.npy', 'rb') as f:
+    rate_2 = np.load(f).ravel()
+with open('Resources/Plotting/rate_3.npy', 'rb') as f:
+    rate_3 = np.load(f).ravel()
+
 with open('Resources/Plotting/spike_channels.npy', 'rb') as f:
     spike_channels = np.load(f)
 with open('Resources/Plotting/spike_times.npy', 'rb') as f:
@@ -114,20 +123,24 @@ spacing = 1
 
 ax2 = fig.add_subplot(gs[:,0])
 ax2.plot(time_base, input_0, color="k", label=r"Input c")
-ax2.plot(time_base, target_0, color="g", linestyle="--", label=r"$y_{\textnormal{target}}$")
-ax2.plot(time_base, final_out_0, color="C4", label=r"$y_{\textnormal{spiking}}$")
+ax2.plot(time_base, target_0, color="C8", linestyle="dotted", linewidth=3, label=r"$y_{\textnormal{target}}$")
+ax2.plot(time_base, final_out_0, color="C4", linestyle="--", label=r"$y_{\textnormal{spiking}}$")
+ax2.plot(time_base, rate_0, color="C2", label=r"$y_{\textnormal{rate}}$")
 
 ax2.plot(time_base, 1*(2+spacing)+input_3, color="k")
-ax2.plot(time_base, 1*(2+spacing)+target_3, color="g", linestyle="--")
-ax2.plot(time_base, 1*(2+spacing)+final_out_3, color="C4")
+ax2.plot(time_base, 1*(2+spacing)+target_3, color="C8", linestyle="dotted", linewidth=3)
+ax2.plot(time_base, 1*(2+spacing)+final_out_3, color="C4", linestyle="--")
+ax2.plot(time_base, 1*(2+spacing)+rate_3, color="C2")
 
 ax2.plot(time_base, 2*(2+spacing)+input_2, color="k")
-ax2.plot(time_base, 2*(2+spacing)+target_2, color="g", linestyle="--")
-ax2.plot(time_base, 2*(2+spacing)+final_out_2, color="C4")
+ax2.plot(time_base, 2*(2+spacing)+target_2, color="C8", linestyle="dotted", linewidth=3)
+ax2.plot(time_base, 2*(2+spacing)+final_out_2, color="C4", linestyle="--")
+ax2.plot(time_base, 2*(2+spacing)+rate_2, color="C2")
 
 ax2.plot(time_base, 3*(2+spacing)+input_1, color="k")
-ax2.plot(time_base, 3*(2+spacing)+target_1, color="g", linestyle="--")
-ax2.plot(time_base, 3*(2+spacing)+final_out_1, color="C4")
+ax2.plot(time_base, 3*(2+spacing)+target_1, color="C8", linestyle="dotted", linewidth=3)
+ax2.plot(time_base, 3*(2+spacing)+final_out_1, color="C4", linestyle="--")
+ax2.plot(time_base, 3*(2+spacing)+rate_1, color="C2")
 
 ax2.legend(frameon=False, loc=1, prop={'size': 5})
 ax2.spines["top"].set_visible(False)

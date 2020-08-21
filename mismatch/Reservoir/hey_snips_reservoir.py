@@ -523,12 +523,12 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    config = {"biasInp": 0.0, "biasRec": 0.001, "dt": 0.0001,
-             "inputScaling": [2.4, 1.0, 2.8, 3.1], "numChannels": 16, "numLiquids": 8, "numNeurons": 768,
-             "refractory": 0.0, "regularization": 100.0, "sparsityInp": 0.01, "sparsityRec": 0.043, "tauNInp": 0.012,
-             "tauRecMin": 0.007, "tauRecMax": 0.114, "tauSOut": 0.326,
-             "threshRecMean": -0.055, "threshRecStd": 0.001, "wInhScaling": 6.9, "wInpRecMean": 0.015, "inh_neurons_ratio": 5,
-             "wInpRecStd": 0.0, "wRecExcMean": 0.0015, "wRecExcStd": 0.0001}
+    config = {"biasInp": 0.0, "biasRec": 0.0, "dt": 0.0001,
+            "inputScaling": [2.0, 2.0, 2.0, 2.0], "numChannels": 16, "numLiquids": 8, "numNeurons": 768,
+            "refractory": 0.0, "regularization": 100.0, "sparsityInp": 0.01, "sparsityRec": 0.041,
+            "tauNInp": 0.012, "tauRecMax": 0.112, "tauRecMin": -0.074, "tauSOut": 0.256, "threshRecMean": -0.055,
+            "threshRecStd": 0.0, "wInhScaling": 4.73, "wInpRecMean": 0.0183, "wInpRecStd": 0.0,
+            "wRecExcMean": 0.0015, "wRecExcStd": 0.0001}
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
@@ -568,7 +568,7 @@ if __name__ == "__main__":
                 plot=False,
                 train=True,
                 fs=experiment.sampling_freq,
-                estimate_thresholds=True,
+                estimate_thresholds=False,
                 thresholds=thresholds,
                 threshold_0=threshold_0,
                 threshold_sums=threshold_sums,

@@ -230,7 +230,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    parser.add_argument('--num-trials', default=10, type=int, help="Number of trials this experiment is repeated")
+    parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
     
     args = vars(parser.parse_args())
     verbose = args['verbose']

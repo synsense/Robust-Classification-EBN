@@ -63,13 +63,19 @@ class LSM(BaseModel):
             self.lyr_filt_mismatch, self.lyr_inp_mismatch, self.lyr_res_mismatch, self.lyr_out_mismatch = layers_mismatch
 
         for i, tau in enumerate(self.lyr_res.tau_mem):
-            self.lyr_res_mismatch.tau_mem[i] = np.random.normal(tau, mismatch_std * tau, 1)
+            self.lyr_res_mismatch.tau_mem[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1))
+            if(self.lyr_res_mismatch.tau_mem[i] == 0):
+                self.lyr_res_mismatch.tau_mem[i] += 0.001
 
         for i, tau in enumerate(self.lyr_res.tau_syn_exc):
-            self.lyr_res_mismatch.tau_syn_exc[i] = np.random.normal(tau, mismatch_std * tau, 1)
+            self.lyr_res_mismatch.tau_syn_exc[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1))
+            if(self.lyr_res_mismatch.tau_syn_exc[i] == 0):
+                self.lyr_res_mismatch.tau_syn_exc[i] += 0.001
 
         for i, tau in enumerate(self.lyr_res.tau_syn_inh):
-            self.lyr_res_mismatch.tau_syn_inh[i] = np.random.normal(tau, mismatch_std * tau, 1) 
+            self.lyr_res_mismatch.tau_syn_inh[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1)) 
+            if(self.lyr_res_mismatch.tau_syn_inh[i] == 0):
+                self.lyr_res_mismatch.tau_syn_inh[i] += 0.001
 
         for i, th in enumerate(self.lyr_res.v_thresh):
             new_th = np.random.normal(th, abs(mismatch_std * th), 1)
@@ -204,8 +210,16 @@ if __name__ == "__main__":
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
+    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
+    
+    parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
+    
+    args = vars(parser.parse_args())
+    percentage_data = args['percentage_data']
+    num_trials = args['num_trials']
+
     batch_size = 1
-    percentage_data = 1.0
     balance_ratio = 1.0
     downsample = 200 
     num_filters = 16
@@ -213,7 +227,6 @@ if __name__ == "__main__":
     threshold_sums = 3500 / 16000 * downsample 
     snr = 10.
     mismatch_stds = [0.05, 0.2, 0.3]
-    num_trials = 10
     final_array_original = np.zeros((len(mismatch_stds), num_trials))
     final_array_mismatch = np.zeros((len(mismatch_stds), num_trials))
 

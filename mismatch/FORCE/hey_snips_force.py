@@ -4,6 +4,12 @@ import json
 import numpy as onp
 import jax.numpy as jnp
 from jax import vmap, jit
+import jax
+
+# # - Debugging
+# from jax.config import config
+# config.update('jax_disable_jit', True)
+
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
 matplotlib.rc('text')
@@ -23,6 +29,7 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
+import gc
 
 class HeySnipsNetworkFORCE(BaseModel):
     def __init__(self,
@@ -193,6 +200,8 @@ class HeySnipsNetworkFORCE(BaseModel):
                 print("Epoch", epoch, "Batch ID", batch_id , flush=True)
                 print("Loss", onp.mean(avg_loss), flush=True)
                 print("--------------------", flush=True)
+
+                # jax.profiler.save_device_memory_profile(f"memory{batch_id}.prof")
 
                 if(batch_id % 2 == 0 and self.verbose > 0):
                     # - Also evolve over input and plot a little bit

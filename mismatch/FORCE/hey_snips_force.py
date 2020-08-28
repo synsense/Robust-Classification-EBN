@@ -6,9 +6,10 @@ import jax.numpy as jnp
 from jax import vmap, jit
 import jax
 
-# # - Debugging
+# - Debugging
 # from jax.config import config
 # config.update('jax_disable_jit', True)
+# config.update('jax_log_compiles', 1)
 
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
@@ -29,7 +30,6 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-import gc
 
 class HeySnipsNetworkFORCE(BaseModel):
     def __init__(self,
@@ -52,7 +52,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.tau_syn = tau_syn
         self.num_epochs = num_epochs
         self.threshold = threshold
-        self.threshold0 = 0.3
+        self.threshold0 = 0.5
         self.best_boundary = 200
         self.fs = fs
         self.verbose = verbose
@@ -102,7 +102,7 @@ class HeySnipsNetworkFORCE(BaseModel):
             # - Create weight matrices etc.
             self.t_ref = 0.002
             self.tau_mem = 0.01
-            self.tau_syn = 0.02
+            self.tau_syn = 0.07
             self.v_reset = -65
             self.v_peak = -40
 
@@ -111,7 +111,6 @@ class HeySnipsNetworkFORCE(BaseModel):
             Q = 10
             G = 0.04
 
-            # - TODO Scale approp.
             D = onp.random.randn(self.Nc, self.num_neurons)
 
             OMEGA = G*(onp.random.randn(self.num_neurons,self.num_neurons)) * (onp.random.random(size=(self.num_neurons,self.num_neurons)) < p).astype(int) / (onp.sqrt(self.num_neurons)*p)
@@ -176,6 +175,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         avg_loss = onp.ones((time_horizon,))
 
         self.best_model = self.force_layer
+        was_lower = 0
 
         for epoch in range(self.num_epochs):
 
@@ -237,6 +237,13 @@ class HeySnipsNetworkFORCE(BaseModel):
 
                 # - Save model
                 self.save(os.path.join(self.base_path, self.network_name))
+                was_lower = 0
+            else:
+                was_lower += 1
+
+            # - Early stopping
+            if(was_lower == 2):
+                return
 
         # - End for epoch
     # - End train
@@ -394,7 +401,7 @@ if __name__ == "__main__":
     parser.add_argument('--tau-syn', default=0.02, type=float, help="Synapse time constant")
     parser.add_argument('--tau-mem', default=0.01, type=float, help="Membrane time constant")
     parser.add_argument('--alpha', default=0.00001, type=float, help="Membrane time constant")
-    parser.add_argument('--epochs', default=5, type=int, help="Number of training epochs")
+    parser.add_argument('--epochs', default=15, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
 

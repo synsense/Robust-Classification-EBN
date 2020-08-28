@@ -27,10 +27,6 @@ def smooth(y):
     f = interp1d(x=x_orig,y=y, kind="linear")
     r = f(levels)
     r_smoothed = gaussian_filter1d(r, sigma=50)
-    # plt.plot(x_orig, y)
-    # plt.plot(levels, r)
-    # plt.plot(levels, r_smoothed)
-    # plt.show()
     return r_smoothed
 
 
@@ -55,15 +51,6 @@ with open(file_path_mean_firing_rate_ebn, 'rb') as f:
     data_mfr_ebn = np.load(f)
 with open(file_path_mean_firing_rate_no_ebn, 'rb') as f:
     data_mfr_no_ebn = np.load(f)
-
-# data_mse_ebn = np.asarray([get_data(mean=3+np.random.rand(), std = 0.15) for _ in range(len(sigmas))])
-# data_mse_no_ebn = np.asarray([get_data(mean=3+np.random.rand(), std = 0.1) for _ in range(len(sigmas))])
-
-# data_acc_ebn = np.asarray([get_data(mean=np.random.rand(), std = 0.15) for _ in range(len(sigmas))])
-# data_acc_no_ebn = np.asarray([get_data(mean=np.random.rand(), std = 0.1) for _ in range(len(sigmas))])
-
-# data_mfr_ebn = np.asarray([get_data(mean=10+np.random.rand(), std = 0.15) for _ in range(len(sigmas))])
-# data_mfr_no_ebn = np.asarray([get_data(mean=10+np.random.rand(), std = 0.1) for _ in range(len(sigmas))])
 
 
 vector_mean_mse_ebn = np.mean(data_mse_ebn, axis=1)
@@ -107,12 +94,11 @@ ax1.fill_between(levels,vector_mean_mse_ebn-vector_std_mse_ebn, vector_mean_mse_
 ax1.plot(levels,vector_mean_mse_no_ebn, marker="o", markevery=[0,333,666,999], markersize=5, label="No EBN", color="C4")
 ax1.fill_between(levels, vector_mean_mse_no_ebn-vector_std_mse_no_ebn, vector_mean_mse_no_ebn+vector_std_mse_no_ebn, alpha=0.3, facecolor="C4")
 
-ax1.legend(frameon=False, loc=1, fontsize=5)
+ax1.legend(frameon=False, loc=0, fontsize=5)
 ax1.set_xticklabels(sigmas)
 ax1.set_xlabel(r"$\sigma$")
 ax1.set_ylabel("MSE")
-# ax1.set_ylim([0.0, 2.0])
-ax1.set_yticks([])
+ax1.set_yticks([3,6,9])
 ax1.spines["top"].set_visible(False)
 ax1.spines["right"].set_visible(False)
 

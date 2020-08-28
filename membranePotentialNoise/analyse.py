@@ -285,9 +285,9 @@ if __name__ == "__main__":
     file_path_acc_no_ebn = '/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/acc_no_ebn.npy'
 
 
-    # if(os.path.exists(file_path_mean_firing_rate_ebn)):
-    #     print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-    #     sys.exit(0)
+    if(os.path.exists(file_path_mean_firing_rate_ebn)):
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
     np.random.seed(42)
 

@@ -31,14 +31,15 @@ def apply_mismatch(force_layer, std_p=0.2):
     tau_syn = copy(force_layer.tau_syn)
     tau_mem = copy(force_layer.tau_mem)
 
-    def _m(d):
+    def _m(d, std_p):
         for i,v in enumerate(d):
             d[i] = onp.random.normal(loc=v, scale=std_p*abs(v))
         return d
-    # v_thresh = _m(v_thresh)
-    v_thresh = v_thresh
-    tau_syn = onp.abs(_m(tau_syn))
-    tau_mem = onp.abs(_m(tau_mem))
+
+    v_thresh_std = std_p*abs((force_layer.v_thresh[0] - force_layer.v_reset[0])/force_layer.v_thresh[0]) 
+    v_thresh = _m(v_thresh, v_thresh_std)
+    tau_syn = onp.abs(_m(tau_syn, std_p))
+    tau_mem = onp.abs(_m(tau_mem, std_p))
 
     # - Create force layer
     force_layer_mismatch = JaxFORCE(w_in = force_layer.w_in,
@@ -84,6 +85,8 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         self.test_acc_original = 0.0
         self.test_acc_mismatch = 0.0
+        self.mean_mse_original = 0.0
+        self.mean_mse_mismatch = 0.0
 
         self.mismatch_std = mismatch_std
 
@@ -158,6 +161,8 @@ class HeySnipsNetworkFORCE(BaseModel):
         correct_mismatch = 0
         correct_rate = 0
         counter = 0
+        sum_error_original = 0
+        sum_error_mismatch = 0
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
@@ -211,6 +216,13 @@ class HeySnipsNetworkFORCE(BaseModel):
                 if(predicted_label_mismatch == target_labels[idx]):
                     correct_mismatch += 1
 
+                ### MSE ###
+                error_original = onp.mean(onp.linalg.norm(batched_res_inputs[idx]-batched_ts_out_original[idx], axis=0))
+                error_mismatch = onp.mean(onp.linalg.norm(batched_res_inputs[idx]-batched_ts_out_mismatch[idx], axis=0))
+
+                sum_error_original += error_original
+                sum_error_mismatch += error_mismatch
+
                 #### Rate ####
                 predicted_rate_label = 0
                 if(onp.any(batched_rate_output[idx] > 0.7)):
@@ -229,17 +241,21 @@ class HeySnipsNetworkFORCE(BaseModel):
         test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
         rate_acc = correct_rate / counter
-        print("Test accuracy is %.3f | Test accuracy MISMATCH is %.3f | Rate accuracy is %.3f" % (test_acc, test_acc_mismatch, rate_acc), flush=True)
+        print("Test accuracy is %.3f | Test accuracy MISMATCH is %.3f | Rate accuracy is %.3f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (test_acc, test_acc_mismatch, rate_acc, sum_error_original/counter, sum_error_mismatch/counter), flush=True)
 
         self.test_acc_original = test_acc
         self.test_acc_mismatch = test_acc_mismatch
+        self.mean_mse_original = sum_error_original / counter
+        self.mean_mse_mismatch = sum_error_mismatch / counter
 
 if __name__ == "__main__":
 
     force_orig_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_test_accuracies.npy'
     force_mismatch_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_test_accuracies_mismatch.npy'
+    force_mse_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_mse.npy'
+    force_mse_mismatch_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_mse_mismatch.npy'
 
-    if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path)):
+    if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path) and os.path.exists(force_mse_final_path) and os.path.exists(force_mse_mismatch_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
@@ -257,6 +273,9 @@ if __name__ == "__main__":
     final_array_original = onp.zeros((len(mismatch_stds), num_trials))
     final_array_mismatch = onp.zeros((len(mismatch_stds), num_trials))
 
+    final_array_mse_original = onp.zeros((len(mismatch_stds), num_trials))
+    final_array_mse_mismatch = onp.zeros((len(mismatch_stds), num_trials))
+
     batch_size = 100
     balance_ratio = 1.0
     snr = 10.
@@ -265,6 +284,9 @@ if __name__ == "__main__":
 
         accuracies_original = []
         accuracies_mismatch = []
+
+        mse_original = []
+        mse_mismatch = []
 
         for _ in range(num_trials):
 
@@ -295,14 +317,29 @@ if __name__ == "__main__":
             accuracies_original.append(model.test_acc_original)
             accuracies_mismatch.append(model.test_acc_mismatch)
 
+            mse_original.append(model.mean_mse_original)
+            mse_mismatch.append(model.mean_mse_mismatch)
+
         final_array_original[idx,:] = onp.array(accuracies_original)
         final_array_mismatch[idx,:] = onp.array(accuracies_mismatch)
 
+        final_array_mse_original[idx,:] = onp.array(mse_original)
+        final_array_mse_mismatch[idx,:] = onp.array(mse_mismatch)
+
     print(final_array_original)
     print(final_array_mismatch)
+    print("-----------------------------------")
+    print(final_array_mse_original)
+    print(final_array_mse_mismatch)
 
     with open(force_orig_final_path, 'wb') as f:
         onp.save(f, final_array_original)
 
     with open(force_mismatch_final_path, 'wb') as f:
         onp.save(f, final_array_mismatch)
+
+    with open(force_mse_final_path, 'wb') as f:
+        onp.save(f, final_array_mse_original)
+
+    with open(force_mse_mismatch_final_path, 'wb') as f:
+        onp.save(f, final_array_mse_mismatch)

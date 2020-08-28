@@ -246,6 +246,7 @@ class HeySnipsNetworkADS(BaseModel):
     def train(self, data_loader, fn_metrics):
 
         self.best_model = self.net
+        was_lower = 0
 
         for epoch in range(self.num_epochs):
 
@@ -319,9 +320,13 @@ class HeySnipsNetworkADS(BaseModel):
 
                 # - Save model
                 self.save(os.path.join(self.base_path, self.network_name))
+                was_lower = 0
+            else:
+                was_lower += 1
 
-                if(val_acc > 0.87):
-                    return
+            # - Early stopping
+            if(was_lower == 2):
+                return
 
         # - End for epoch
     # - End train

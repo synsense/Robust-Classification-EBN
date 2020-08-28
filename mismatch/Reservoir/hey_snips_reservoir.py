@@ -425,6 +425,7 @@ class LSM(BaseModel):
             val_pred_tgt_signals = []
 
             # validation
+            integral_pairs = []
             for batch_id, [batch, val_logger] in enumerate(data_loader.val_set()):
 
                 if batch_id > self.num_val:
@@ -448,6 +449,15 @@ class LSM(BaseModel):
                                                                       augment_with_white_noise=0.0,
                                                                       dataset='val')
 
+                
+                # - Compute the integral for the points that lie above threshold0
+                integral_final_out = np.copy(pred_tgt_signals[0])
+                integral_final_out[integral_final_out < self.threshold_0] = 0.0
+                for t,val in enumerate(integral_final_out):
+                    if(val > 0.0):
+                        integral_final_out[t] = val + integral_final_out[t-1]
+                integral_pairs.append((np.max(integral_final_out),true_labels[0]))
+
 
                 val_true_labels += true_labels.tolist()
                 val_pred_labels += pred_labels.tolist()
@@ -459,18 +469,23 @@ class LSM(BaseModel):
 
             val_acc = metrics.accuracy_score(val_true_labels, val_pred_labels)
 
+
             if self.estimate_thresholds:
                 # determine thresholds based on the validation set
-                batch_result = BatchResult()
-                batch_result.true_label_ids = np.array(val_true_labels)
-                batch_result.target_signals = np.vstack(val_true_tgt_signals)
-                batch_result.predicted_label_ids = np.array(val_pred_labels)
-                batch_result.predicted_target_signals = np.vstack(val_pred_tgt_signals)
-
-                rocs, optimal_thresholds = roc(batch_result)
-                self.threshold_sums = optimal_thresholds[1]
-
-                print(self.thresholds, self.threshold_0, self.threshold_sums)
+                # - Find best boundaries for classification using the continuous integral
+                min_val = np.min([x for (x,y) in integral_pairs])
+                max_val = np.max([x for (x,y) in integral_pairs])
+                best_boundary = min_val
+                best_acc = 0.5
+                for boundary in np.linspace(min_val, max_val, 1000):
+                    acc = (len([x for (x,y) in integral_pairs if y == 1 and x > boundary]) + len([x for (x,y) in integral_pairs if y == 0 and x <= boundary])) / len(integral_pairs)
+                    if(acc >= best_acc):
+                        best_acc = acc
+                        best_boundary = boundary
+                
+                self.threshold_sums = best_boundary
+                print(f"Best validation accuracy after finding boundary is {best_acc} with boundary {best_boundary}")
+                val_acc = best_acc
 
             print(f"val acc {val_acc}")
 
@@ -531,7 +546,7 @@ if __name__ == "__main__":
             "wRecExcMean": 0.0015, "wRecExcStd": 0.0001}
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     args = vars(parser.parse_args())
     percentage_data = args['percentage_data']
 
@@ -541,8 +556,8 @@ if __name__ == "__main__":
     downsample = 200 
     num_filters = 16
     thresholds = np.array([1., 10.0, 1.])
-    threshold_0 = 0.30
-    threshold_sums = 3500 / 16000 * downsample 
+    threshold_0 = 0.50
+    threshold_sums = 100
     snr = 10.
 
     experiment = HeySnipsDEMAND(batch_size=batch_size,
@@ -568,7 +583,7 @@ if __name__ == "__main__":
                 plot=False,
                 train=True,
                 fs=experiment.sampling_freq,
-                estimate_thresholds=False,
+                estimate_thresholds=True,
                 thresholds=thresholds,
                 threshold_0=threshold_0,
                 threshold_sums=threshold_sums,

@@ -78,12 +78,11 @@ class LSM(BaseModel):
                 self.lyr_res_mismatch.tau_syn_inh[i] += 0.001
 
         for i, th in enumerate(self.lyr_res.v_thresh):
-            new_th = np.random.normal(th, abs(mismatch_std * th), 1)
+            # - Compute fair std for the difference between v_thresh and v_reset
+            v_thresh_std = mismatch_std*abs((th - self.lyr_res.v_reset[i])/th)
+            new_th = np.random.normal(th, abs(v_thresh_std * th), 1)
             if(self.lyr_res_mismatch.v_reset[i] < new_th):
                 self.lyr_res_mismatch.v_thresh[i] = new_th
-
-        # for i, rest in enumerate(self.lyr_res.v_rest):
-        #    self.lyr_res_mismatch.v_rest[i] = np.random.normal(rest, abs(mismatch_std * rest), 1)
 
 
     def save(self, fn):

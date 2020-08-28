@@ -65,7 +65,7 @@ class HeySnipsNetworkADS(BaseModel):
 
         self.num_epochs = num_epochs
         self.threshold = threshold
-        self.threshold0 = 0.6
+        self.threshold0 = 0.5
         self.best_boundary = 200 # - This value is optimized in validation 
 
         self.num_rate_neurons = 128 

@@ -43,6 +43,7 @@ class HeySnipsNetworkFORCE(BaseModel):
                  fs=16000.,
                  verbose=0,
                  network_idx="",
+                 seed=42,
                  name="Snips FORCE",
                  version="1.0"):
         
@@ -62,7 +63,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.time_base = onp.arange(0, 5.0, self.dt)
         self.network_idx = network_idx
 
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch/"
+        self.base_path = "/home/julian_synsense_ai/Documents/RobustClassificationWithEBNs/mismatch/"
 
         self.network_name = f"Resources/force{self.network_idx}.json"
 
@@ -93,6 +94,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.lr_params = self.rate_layer._pack()
         self.lr_state = self.rate_layer._state
 
+        onp.random.seed(seed)
         # - Create spiking net
         self.model_path_force_net = os.path.join(self.base_path, self.network_name)
         if(os.path.exists(self.model_path_force_net)):
@@ -141,6 +143,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
 
         self.best_model = self.force_layer
+        onp.random.seed(42)
 
     def save(self, fn, use_best = False):
         if(use_best):
@@ -259,6 +262,9 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.val_set()):
         
+            if(batch_id > 1000):
+                break
+
             filtered = onp.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
             tgt_signals = onp.stack([s[2] for s in batch])
@@ -406,7 +412,8 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=15, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    parser.add_argument('--num-networks', default="", type=str, help="Number of network instances to train")
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--seed', default=42, type=int, help="Random seed")
 
     args = vars(parser.parse_args())
     num = args['num']
@@ -417,46 +424,44 @@ if __name__ == "__main__":
     num_epochs = args['epochs']
     threshold = args['threshold']
     percentage_data = args['percentage_data']
-    num_networks = args['num_networks']
+    network_idx = args['network_idx']
+    seed = args['seed']
 
-    int_num_networks = 1
-    if(num_networks != ""):
-        int_num_networks = int(num_networks)
 
-    for network_idx in range(int(num_networks)):
+    batch_size = 1
+    balance_ratio = 1.0
+    snr = 10.
 
-        batch_size = 1
-        balance_ratio = 1.0
-        snr = 10.
+    experiment = HeySnipsDEMAND(batch_size=batch_size,
+                            percentage=percentage_data,
+                            snr=snr,
+                            randomize_after_epoch=True,
+                            downsample=1000,
+                            is_tracking=False,
+                            one_hot=False,
+                            cache_folder=None)
 
-        experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                percentage=percentage_data,
-                                snr=snr,
-                                randomize_after_epoch=True,
-                                downsample=1000,
-                                is_tracking=False,
-                                one_hot=False)
+    num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
+    num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
+    num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
 
-        num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
-        num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
-        num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+    model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
+                                num_neurons=num,
+                                tau_mem=tau_mem,
+                                tau_syn=tau_syn,
+                                alpha=alpha,
+                                num_epochs=num_epochs,
+                                threshold=threshold,
+                                verbose=verbose,
+                                network_idx=network_idx,
+                                seed=seed)
 
-        model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
-                                    num_neurons=num,
-                                    tau_mem=tau_mem,
-                                    tau_syn=tau_syn,
-                                    alpha=alpha,
-                                    num_epochs=num_epochs,
-                                    threshold=threshold,
-                                    verbose=verbose,
-                                    network_idx=network_idx)
-
-        experiment.set_model(model)
-        experiment.set_config({'num_train_batches': num_train_batches,
-                            'num_val_batches': num_val_batches,
-                            'num_test_batches': num_test_batches,
-                            'batch size': batch_size,
-                            'percentage data': percentage_data,
-                            'snr': snr,
-                            'balance_ratio': balance_ratio})
-        experiment.start()
+    experiment.set_model(model)
+    experiment.set_config({'num_train_batches': num_train_batches,
+                        'num_val_batches': num_val_batches,
+                        'num_test_batches': num_test_batches,
+                        'batch size': batch_size,
+                        'percentage data': percentage_data,
+                        'snr': snr,
+                        'balance_ratio': balance_ratio})
+    experiment.start()

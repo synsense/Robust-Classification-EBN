@@ -89,9 +89,9 @@ class LSM(BaseModel):
 
         ##### CREATE NETWORK ######
         network_name = f"Resources/reservoir{self.network_idx}.json"
-        self.model_reservoir_path = os.path.join("/home/julian/Documents/RobustClassificationWithEBNs/mismatch", network_name)
+        self.model_reservoir_path = os.path.join("/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch", network_name)
         if(os.path.exists(self.model_reservoir_path)):
-            print("Reservoir already trained. Exiting. Please comment out this line if you would like to re-train the model.")
+            print("Reservoir already trained. Exiting. Please comment out this line if you would like to re-train the model.",flush=True)
             sys.exit(0)
 
         if type(config) == dict:
@@ -218,7 +218,7 @@ class LSM(BaseModel):
         fan_out = (self.lyr_res.weights_rec != 0).astype(int).sum(axis=1)
         raster = ts_state.raster(dt=self.lyr_res.dt).astype(int)
         syn_events = (raster * fan_out).sum(axis=1)
-        print(f"synaptic events {syn_events.max()}")
+        print(f"synaptic events {syn_events.max()}",flush=True)
 
         ###########################
 
@@ -248,7 +248,7 @@ class LSM(BaseModel):
             else:
                 predicted_label = 0
 
-            print("Target", tgt_label, "Predicted", predicted_label, np.max(act_))
+            print("Target", tgt_label, "Predicted", predicted_label, np.max(act_),flush=True)
 
 
             if dataset == 'val':
@@ -266,11 +266,11 @@ class LSM(BaseModel):
             self.mov_avg_acc /= self.num_samples
 
             if(dataset == 'train'):
-                print("TRAINING: mov avg acc", self.mov_avg_acc)
+                print("TRAINING: mov avg acc", self.mov_avg_acc,flush=True)
             elif(dataset == 'val'):
-                print("VALIDATION: mov avg acc", self.mov_avg_acc)
+                print("VALIDATION: mov avg acc", self.mov_avg_acc,flush=True)
             else:
-                print("TESTING: mov avg acc", self.mov_avg_acc)
+                print("TESTING: mov avg acc", self.mov_avg_acc,flush=True)
 
             true_labels.append(tgt_label)
             predicted_labels.append(predicted_label)
@@ -296,7 +296,7 @@ class LSM(BaseModel):
 
     def valid_firing_rate(self, tsE: TSEvent):
         firing_rate = len(tsE.times) / (tsE.duration * tsE.num_channels)
-        print(f"FIRING RATE {firing_rate}")
+        print(f"FIRING RATE {firing_rate}",flush=True)
         if 500. > firing_rate > 10.:
             self.valid_firing = True
         else:
@@ -313,7 +313,7 @@ class LSM(BaseModel):
             if self.use_train:
                 fn_init = os.path.join(self.base_path, f"Resources/init_snips_{self.num_channels}_{self.num_neurons}.json")
                 if epoch == 0 and type(self.config) is dict and not os.path.exists(fn_init):
-                    print("DETERMINE INPUT PROJECTIONS")
+                    print("DETERMINE INPUT PROJECTIONS",flush=True)
                     # determine input weights
                     duration = 1.0
                     rasters = []
@@ -328,7 +328,7 @@ class LSM(BaseModel):
                             if tgt_label != 1:
                                 continue
 
-                            print("Batch id", batch_id)
+                            print("Batch id", batch_id,flush=True)
 
                             sample = sample[0] / np.max(np.abs(sample[0]))
 
@@ -354,11 +354,11 @@ class LSM(BaseModel):
                             raster = ts_inp_filt.raster(1/self.num_neurons).astype(int).T
                             rasters.append(raster)
 
-                    print("RASTER SHAPE", np.shape(raster))
+                    print("RASTER SHAPE", np.shape(raster),flush=True)
                     raster = np.mean(rasters, axis=0)
                     raster /= np.max(raster)
                     #raster[raster < raster.mean() + 2 * raster.std()] = 0
-                    print("RASTER SHAPE", np.shape(raster))
+                    print("RASTER SHAPE", np.shape(raster),flush=True)
                     self.lyr_res.weights_in = raster[:self.num_channels,
                                                      :self.num_neurons] * self.config['wInpRecMean']
 
@@ -396,7 +396,7 @@ class LSM(BaseModel):
                         self.valid_firing_rate(ts_state)
 
                     if not self.valid_firing:
-                        print("Invalid firing rate!")
+                        print("Invalid firing rate!",flush=True)
                         return
 
                     self.lyr_out.train_rr(ts_tgt_batch,
@@ -435,10 +435,10 @@ class LSM(BaseModel):
                     break
 
                 if not self.valid_firing:
-                    print("Invalid firing rate!")
+                    print("Invalid firing rate!",flush=True)
                     break
 
-                print(f"epoch {epoch}, val batch {batch_id}")
+                print(f"epoch {epoch}, val batch {batch_id}",flush=True)
                 batch = copy.deepcopy(list(batch))
 
                 true_labels, pred_labels, \
@@ -481,10 +481,10 @@ class LSM(BaseModel):
                         best_boundary = boundary
                 
                 self.threshold_sums = best_boundary
-                print(f"Best validation accuracy after finding boundary is {best_acc} with boundary {best_boundary}")
+                print(f"Best validation accuracy after finding boundary is {best_acc} with boundary {best_boundary}",flush=True)
                 val_acc = best_acc
 
-            print(f"val acc {val_acc}")
+            print(f"val acc {val_acc}",flush=True)
 
 
             yield {"my val acc": val_acc}
@@ -495,7 +495,7 @@ class LSM(BaseModel):
         self.num_samples = 0
 
         if  not self.valid_firing:
-            print("Invalid firing rate!")
+            print("Invalid firing rate!",flush=True)
             return
 
         test_true_labels = []
@@ -506,7 +506,7 @@ class LSM(BaseModel):
             if batch_id > self.num_val:
                 break
 
-            print(f"test batch {batch_id}")
+            print(f"test batch {batch_id}",flush=True)
             batch = copy.deepcopy(list(batch))
 
             true_labels, pred_labels, _, pred_tgt_signals, *_ = self.predict(batch, dataset='test')
@@ -520,9 +520,9 @@ class LSM(BaseModel):
         test_acc = metrics.accuracy_score(test_true_labels, test_pred_labels)
         cm = metrics.confusion_matrix(test_true_labels, test_pred_labels)
 
-        print(cm)
+        print(cm,flush=True)
 
-        print(f"test acc {test_acc}")
+        print(f"test acc {test_acc}",flush=True)
 
 
 
@@ -538,7 +538,7 @@ if __name__ == "__main__":
             "wRecExcMean": 0.0015, "wRecExcStd": 0.0001}
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     parser.add_argument('--seed', default=42, type=int, help="Random seed")
     

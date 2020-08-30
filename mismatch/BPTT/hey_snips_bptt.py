@@ -479,7 +479,7 @@ if __name__ == "__main__":
     
     parser.add_argument('--num', default=768, type=int, help="Number of neurons in the network, best results obtained using 512 neurons")
     parser.add_argument('--verbose', default=1, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--epochs', default=5, type=int, help="Number of training epochs")
+    parser.add_argument('--epochs', default=20, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")

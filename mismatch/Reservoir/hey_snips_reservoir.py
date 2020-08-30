@@ -42,6 +42,7 @@ class LSM(BaseModel):
                  estimate_thresholds=False,
                  num_val=np.Inf,
                  network_idx="",
+                 seed=42,
                  name="LSMTensorCommandsSnips",
                  version="0.1"):
 
@@ -84,6 +85,8 @@ class LSM(BaseModel):
 
         self.network_idx = network_idx
 
+        np.random.seed(seed)
+
         ##### CREATE NETWORK ######
         network_name = f"Resources/reservoir{self.network_idx}.json"
         self.model_reservoir_path = os.path.join("/home/julian/Documents/RobustClassificationWithEBNs/mismatch", network_name)
@@ -116,6 +119,8 @@ class LSM(BaseModel):
 
         self.num_channels = num_filters #self.lyr_filt.num_filters
         self.num_neurons = self.lyr_res.weights_rec.shape[0]
+
+        np.random.seed(42)
 
 
     def terminate(self):
@@ -534,11 +539,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    parser.add_argument('--num-networks', default="", type=str, help="Number of network instances to train")
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--seed', default=42, type=int, help="Random seed")
     
     args = vars(parser.parse_args())
     percentage_data = args['percentage_data']
-    num_networks = args['num_networks']
+    network_idx = args['network_idx']
+    seed = args['seed']
 
     batch_size = 1
     percentage_data = percentage_data
@@ -550,55 +557,51 @@ if __name__ == "__main__":
     threshold_sums = 100
     snr = 10.
 
-    int_num_networks = 1
-    if(num_networks != ""):
-        int_num_networks = int(num_networks)
+    experiment = HeySnipsDEMAND(batch_size=batch_size,
+                                percentage=percentage_data,
+                                balance_ratio=balance_ratio,
+                                snr=snr,
+                                one_hot=False,
+                                num_filters=num_filters,
+                                downsample=downsample,
+                                is_tracking=False,
+                                cache_folder=None)
 
-    for network_idx in range(int(num_networks)):
+    num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+    num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+    num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
-        experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                    percentage=percentage_data,
-                                    balance_ratio=balance_ratio,
-                                    snr=snr,
-                                    one_hot=False,
-                                    num_filters=num_filters,
-                                    downsample=downsample,
-                                    is_tracking=False)
-
-        num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
-        num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
-        num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
-
-        model = LSM(config=config,
-                    num_epochs=1,
-                    num_batches=num_train_batches,
-                    num_labels=experiment.num_labels,
-                    num_cores=8,
-                    downsample=downsample,
-                    num_filters=num_filters,
-                    plot=False,
-                    train=True,
-                    fs=experiment.sampling_freq,
-                    estimate_thresholds=True,
-                    thresholds=thresholds,
-                    threshold_0=threshold_0,
-                    threshold_sums=threshold_sums,
-                    network_idx=network_idx,
-                    num_val=1000)
+    model = LSM(config=config,
+                num_epochs=1,
+                num_batches=num_train_batches,
+                num_labels=experiment.num_labels,
+                num_cores=8,
+                downsample=downsample,
+                num_filters=num_filters,
+                plot=False,
+                train=True,
+                fs=experiment.sampling_freq,
+                estimate_thresholds=True,
+                thresholds=thresholds,
+                threshold_0=threshold_0,
+                threshold_sums=threshold_sums,
+                network_idx=network_idx,
+                seed=seed,
+                num_val=1000)
 
 
-        experiment.set_model(model)
-        experiment.set_config({'num_train_batches': num_train_batches,
-                            'num_val_batches': num_val_batches,
-                            'num_test_batches': num_test_batches,
-                            'batch size': batch_size,
-                            'percentage data': percentage_data,
-                            'threshold': thresholds.tolist(),
-                            'threshold_0': threshold_0,
-                            'threshold_sums': threshold_sums,
-                            'snr': snr,
-                            'balance_ratio': balance_ratio,
-                            'model_config': config})
+    experiment.set_model(model)
+    experiment.set_config({'num_train_batches': num_train_batches,
+                        'num_val_batches': num_val_batches,
+                        'num_test_batches': num_test_batches,
+                        'batch size': batch_size,
+                        'percentage data': percentage_data,
+                        'threshold': thresholds.tolist(),
+                        'threshold_0': threshold_0,
+                        'threshold_sums': threshold_sums,
+                        'snr': snr,
+                        'balance_ratio': balance_ratio,
+                        'model_config': config})
 
 
-        experiment.start()
+    experiment.start()

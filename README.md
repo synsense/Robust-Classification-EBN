@@ -109,7 +109,7 @@ In this section, the robustness to component mismatch is investigated for differ
 Note that this process takes a long time if done entirely from scratch. If you would like to re-run everything, simply delete the networks in ```Resources/``` and the plotting material in ```Resources/Plotting/```. Make sure not to delete the rate network as it is needed by the ```FORCE``` and ```NetworkADS``` algorithm.
  
 <center>
-<img src=Figures/figure4_version2.png width="600">
+<img src=Figures/figure4.png width="600">
 </center>
 
 ### Injected Noise

@@ -47,6 +47,7 @@ class HeySnipsNetworkADS(BaseModel):
                  threshold0=0.5,
                  discretize=-1,
                  discretize_dynapse=False,
+                 network_idx="",
                  name="Snips ADS",
                  version="1.0"):
         
@@ -60,6 +61,7 @@ class HeySnipsNetworkADS(BaseModel):
 
         self.num_val = num_val
         self.num_test = num_test
+        self.network_idx = network_idx
 
         self.num_epochs = num_epochs
         self.threshold = threshold
@@ -94,19 +96,20 @@ class HeySnipsNetworkADS(BaseModel):
         self.N_out = self.w_out.shape[1]
 
         # - Create NetworkADS
-        model_path_ads_net = os.path.join(self.base_path,"Resources/hey_snips" + str(self.num_distinct_weights) + ".json")
+        network_name = f"Resources/ads{str(self.num_distinct_weights)}_{self.network_idx}.json"
+        self.model_path_ads_net = os.path.join(self.base_path,network_name)
 
-        if(os.path.exists(model_path_ads_net)):
+        if(os.path.exists(self.model_path_ads_net)):
             print("There is already a network with %d distinct weight-states...exiting (Comment this line and rename/delete the model to re-train.)" % self.num_distinct_weights)
             sys.exit(0)
-            self.net = NetworkADS.load(model_path_ads_net)
+            self.net = NetworkADS.load(self.model_path_ads_net)
             self.Nc = self.net.lyrRes.weights_in.shape[0]
             self.num_neurons = self.net.lyrRes.weights_fast.shape[0]
             self.tau_slow = self.net.lyrRes.tau_syn_r_slow
             self.tau_out = self.net.lyrRes.tau_syn_r_out
             self.tau_mem = np.mean(self.net.lyrRes.tau_mem)
             # Load best val accuracy
-            with open(model_path_ads_net, "r") as f:
+            with open(self.model_path_ads_net, "r") as f:
                 loaddict = json.load(f)
                 self.best_val_acc = loaddict["best_val_acc"]
                 try:
@@ -115,7 +118,7 @@ class HeySnipsNetworkADS(BaseModel):
                 except:
                     print("Model does not have threshold 0 or boundary parameters.")
 
-            print("Loaded pretrained network from %s" % model_path_ads_net)
+            print("Loaded pretrained network from %s" % self.model_path_ads_net)
         else:
             self.Nc = self.num_rate_neurons
             self.num_neurons = num_neurons
@@ -369,7 +372,7 @@ class HeySnipsNetworkADS(BaseModel):
                 savedict["best_val_acc"] = self.best_val_acc
                 savedict["best_boundary"] = self.best_boundary
                 savedict["threshold0"] = self.threshold0
-                fn = os.path.join(self.base_path,("Resources/tmp.json"))
+                fn = self.model_path_ads_net
                 with open(fn, "w") as f:
                     json.dump(savedict, f)
                     print("Saved net", flush=True)
@@ -609,10 +612,7 @@ class HeySnipsNetworkADS(BaseModel):
         test_acc_rate = correct_rate / counter
         print("Test accuracy is %.4f Rate network test accuracy is %.4f" % (test_acc, test_acc_rate), flush=True)
 
-        # - Save the network
-        param_string = "Resources/hey_snips" + str(self.num_distinct_weights) + ".json"
-
-        fn = os.path.join(self.base_path, param_string)
+        fn = self.model_path_ads_net
         # Save the model including the best validation score
         savedict = self.best_model.to_dict()
         savedict["best_val_acc"] = self.best_val_acc
@@ -621,7 +621,7 @@ class HeySnipsNetworkADS(BaseModel):
         with open(fn, "w") as f:
             json.dump(savedict, f)
 
-        print("Saved network as %s" % param_string)
+        print("Saved network as %s" % self.model_path_ads_net)
 
 
 if __name__ == "__main__":
@@ -644,6 +644,7 @@ if __name__ == "__main__":
     parser.add_argument('--discretize', default=-1, type=int, help="Number of total different synaptic weights. -1 means no discretization. 8 means 3-bit precision.")
     parser.add_argument('--discretize-dynapse', default=False, action='store_true', help="Respect constraint of DYNAP-SE of having only 64 synapses per neuron. --discretize must not be -1.")
     parser.add_argument('--threshold0', default=0.5, type=float, help="Threshold above which integral is computed for final classification")
+    parser.add_argument('--num-networks', default="", type=str, help="Number of network instances to train")
 
 
     args = vars(parser.parse_args())
@@ -661,44 +662,52 @@ if __name__ == "__main__":
     discretize_dynapse = args['discretize_dynapse']
     discretize = args['discretize']
     threshold0 = args['threshold0']
+    num_networks = args['num_networks']
 
-    batch_size = 1
-    balance_ratio = 1.0
-    snr = 10.
+    int_num_networks = 1
+    if(num_networks != ""):
+        int_num_networks = int(num_networks)
 
-    experiment = HeySnipsDEMAND(batch_size=batch_size,
-                            percentage=percentage_data,
-                            snr=snr,
-                            randomize_after_epoch=True,
-                            downsample=1000,
-                            is_tracking=False,
-                            one_hot=False)
+    for network_idx in range(int(num_networks)):
 
-    num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
-    num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
-    num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
+        batch_size = 1
+        balance_ratio = 1.0
+        snr = 10.
 
-    model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
-                                num_neurons=num,
-                                tau_slow=tau_slow,
-                                tau_out=tau_out,
-                                num_val=num_val,
-                                num_test=num_test,
-                                num_epochs=num_epochs,
-                                threshold=threshold,
-                                eta=eta,
-                                verbose=verbose,
-                                dry_run=dry_run,
-                                threshold0=threshold0,
-                                discretize=discretize,
-                                discretize_dynapse=discretize_dynapse)
+        experiment = HeySnipsDEMAND(batch_size=batch_size,
+                                percentage=percentage_data,
+                                snr=snr,
+                                randomize_after_epoch=True,
+                                downsample=1000,
+                                is_tracking=False,
+                                one_hot=False)
 
-    experiment.set_model(model)
-    experiment.set_config({'num_train_batches': num_train_batches,
-                           'num_val_batches': num_val_batches,
-                           'num_test_batches': num_test_batches,
-                           'batch size': batch_size,
-                           'percentage data': percentage_data,
-                           'snr': snr,
-                           'balance_ratio': balance_ratio})
-    experiment.start()
+        num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+        num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+        num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
+
+        model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
+                                    num_neurons=num,
+                                    tau_slow=tau_slow,
+                                    tau_out=tau_out,
+                                    num_val=num_val,
+                                    num_test=num_test,
+                                    num_epochs=num_epochs,
+                                    threshold=threshold,
+                                    eta=eta,
+                                    verbose=verbose,
+                                    dry_run=dry_run,
+                                    threshold0=threshold0,
+                                    discretize=discretize,
+                                    discretize_dynapse=discretize_dynapse,
+                                    network_idx=network_idx)
+
+        experiment.set_model(model)
+        experiment.set_config({'num_train_batches': num_train_batches,
+                            'num_val_batches': num_val_batches,
+                            'num_test_batches': num_test_batches,
+                            'batch size': batch_size,
+                            'percentage data': percentage_data,
+                            'snr': snr,
+                            'balance_ratio': balance_ratio})
+        experiment.start()

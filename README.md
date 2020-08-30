@@ -43,7 +43,7 @@ This will train an ADS network on a wake phrase detection task aiming at detecti
 
 To reproduce figure 2, navigate to the folder ```figure2``` and execute
 
-```$ python figure2.py --num 768 --tau-slow 0.07 --tau-out 0.07 --epochs 5 --threshold 0.7 --eta 0.0001 --num-val 500 --num-test 1000 --verbose 1 --percentage-data 0.1```
+```$ python figure2.py --num 768 --tau-slow 0.07 --tau-out 0.07 --epochs 5 --threshold 0.7 --eta 0.0001 --num-val 500 --num-test 1000 --verbose 0 --percentage-data 0.1```
 
 This will train the ADS network to an accuracy of about 87%.
 

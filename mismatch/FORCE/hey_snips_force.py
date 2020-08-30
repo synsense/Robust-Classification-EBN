@@ -42,6 +42,7 @@ class HeySnipsNetworkFORCE(BaseModel):
                  threshold,
                  fs=16000.,
                  verbose=0,
+                 network_idx="",
                  name="Snips FORCE",
                  version="1.0"):
         
@@ -59,10 +60,11 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.noise_std = 0.0
         self.dt = 0.001
         self.time_base = onp.arange(0, 5.0, self.dt)
+        self.network_idx = network_idx
 
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch/"
 
-        self.network_name = "Resources/force.json"
+        self.network_name = f"Resources/force{self.network_idx}.json"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -92,12 +94,12 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.lr_state = self.rate_layer._state
 
         # - Create spiking net
-        model_path_force_net = os.path.join(self.base_path,"Resources/force.json")
-        if(os.path.exists(model_path_force_net)):
+        self.model_path_force_net = os.path.join(self.base_path, self.network_name)
+        if(os.path.exists(self.model_path_force_net)):
             print("FORCE network already trained. Exiting. If you would like to re-train the network, re-name/delete the model and execute this script.")
             sys.exit(0)
-            self.force_layer = self.load_net(model_path_force_net)
-            print("Loaded pretrained force layer")
+            # self.force_layer = self.load_net(self.model_path_force_net)
+            # print("Loaded pretrained force layer")
         else:
             # - Create weight matrices etc.
             self.t_ref = 0.002
@@ -236,7 +238,7 @@ class HeySnipsNetworkFORCE(BaseModel):
                 self.best_model = self.force_layer
 
                 # - Save model
-                self.save(os.path.join(self.base_path, self.network_name))
+                self.save(self.model_path_force_net)
                 was_lower = 0
             else:
                 was_lower += 1
@@ -339,7 +341,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         counter = 0
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
-            if(batch_id == 10):
+            if(batch_id > 1000):
                 break
         
             filtered = onp.stack([s[0][1] for s in batch])
@@ -388,7 +390,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         test_acc = correct / counter
         rate_acc = correct_rate / counter
         print("Test accuracy is %.3f | Rate accuracy is %.3f" % (test_acc, rate_acc), flush=True)
-        self.save(os.path.join(self.base_path, self.network_name), use_best = True)
+        self.save(self.model_path_force_net, use_best = True)
 
 if __name__ == "__main__":
 
@@ -404,6 +406,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=15, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--num-networks', default="", type=str, help="Number of network instances to train")
 
     args = vars(parser.parse_args())
     num = args['num']
@@ -414,38 +417,46 @@ if __name__ == "__main__":
     num_epochs = args['epochs']
     threshold = args['threshold']
     percentage_data = args['percentage_data']
+    num_networks = args['num_networks']
 
-    batch_size = 1
-    balance_ratio = 1.0
-    snr = 10.
+    int_num_networks = 1
+    if(num_networks != ""):
+        int_num_networks = int(num_networks)
 
-    experiment = HeySnipsDEMAND(batch_size=batch_size,
-                            percentage=percentage_data,
-                            snr=snr,
-                            randomize_after_epoch=True,
-                            downsample=1000,
-                            is_tracking=False,
-                            one_hot=False)
+    for network_idx in range(int(num_networks)):
 
-    num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
-    num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
-    num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+        batch_size = 1
+        balance_ratio = 1.0
+        snr = 10.
 
-    model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
-                                num_neurons=num,
-                                tau_mem=tau_mem,
-                                tau_syn=tau_syn,
-                                alpha=alpha,
-                                num_epochs=num_epochs,
-                                threshold=threshold,
-                                verbose=verbose)
+        experiment = HeySnipsDEMAND(batch_size=batch_size,
+                                percentage=percentage_data,
+                                snr=snr,
+                                randomize_after_epoch=True,
+                                downsample=1000,
+                                is_tracking=False,
+                                one_hot=False)
 
-    experiment.set_model(model)
-    experiment.set_config({'num_train_batches': num_train_batches,
-                           'num_val_batches': num_val_batches,
-                           'num_test_batches': num_test_batches,
-                           'batch size': batch_size,
-                           'percentage data': percentage_data,
-                           'snr': snr,
-                           'balance_ratio': balance_ratio})
-    experiment.start()
+        num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
+        num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
+        num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+
+        model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
+                                    num_neurons=num,
+                                    tau_mem=tau_mem,
+                                    tau_syn=tau_syn,
+                                    alpha=alpha,
+                                    num_epochs=num_epochs,
+                                    threshold=threshold,
+                                    verbose=verbose,
+                                    network_idx=network_idx)
+
+        experiment.set_model(model)
+        experiment.set_config({'num_train_batches': num_train_batches,
+                            'num_val_batches': num_val_batches,
+                            'num_test_batches': num_test_batches,
+                            'batch size': batch_size,
+                            'percentage data': percentage_data,
+                            'snr': snr,
+                            'balance_ratio': balance_ratio})
+        experiment.start()

@@ -41,6 +41,7 @@ class LSM(BaseModel):
                  threshold_sums: float = 5000.,
                  estimate_thresholds=False,
                  num_val=np.Inf,
+                 network_idx="",
                  name="LSMTensorCommandsSnips",
                  version="0.1"):
 
@@ -81,8 +82,12 @@ class LSM(BaseModel):
         self.keyword_sums = []
         self.distractor_sums = []
 
+        self.network_idx = network_idx
+
         ##### CREATE NETWORK ######
-        if(os.path.exists(os.path.join(os.getcwd(), "../Resources/reservoir.json"))):
+        network_name = f"Resources/reservoir{self.network_idx}.json"
+        self.model_reservoir_path = os.path.join("/home/julian/Documents/RobustClassificationWithEBNs/mismatch", network_name)
+        if(os.path.exists(self.model_reservoir_path)):
             print("Reservoir already trained. Exiting. Please comment out this line if you would like to re-train the model.")
             sys.exit(0)
 
@@ -372,13 +377,6 @@ class LSM(BaseModel):
                 t0 = time.time()
                 for batch_id, [batch, train_logger] in enumerate(data_loader.train_set()):
 
-                    if (batch_id+1) % 100 == 0:
-                        self.save(os.path.join(self.base_path, "Resources/tmp_snips_demand.json"))
-
-                        # write prograss file
-                        with open(os.path.join(self.base_path, "Resources/progress.json"), "w+") as f:
-                            json.dump({"epoch": epoch, "batch": batch_id, "acc": self.mov_avg_acc, "stage": "train"}, f)
-
                     batch = copy.deepcopy(list(batch))
 
                     true_labels, \
@@ -414,7 +412,7 @@ class LSM(BaseModel):
 
                     t0 = time.time()
                 
-                self.save(os.path.join(self.base_path, "../Resources/reservoir.json"))
+                self.save(self.model_reservoir_path)
 
             self.mov_avg_acc = 0.
             self.num_samples = 0
@@ -434,12 +432,6 @@ class LSM(BaseModel):
                 if not self.valid_firing:
                     print("Invalid firing rate!")
                     break
-
-                if (batch_id+1) % 100 == 0:
-                    # write prograss file
-                    with open(os.path.join(self.base_path, "Resources/progress.json"), "w+") as f:
-                        json.dump({"epoch": epoch, "batch": batch_id, "acc": self.mov_avg_acc, "stage": "val"}, f)
-
 
                 print(f"epoch {epoch}, val batch {batch_id}")
                 batch = copy.deepcopy(list(batch))
@@ -509,11 +501,6 @@ class LSM(BaseModel):
             if batch_id > self.num_val:
                 break
 
-            if (batch_id+1) % 100 == 0:
-                # write prograss file
-                with open(os.path.join(self.base_path, "Resources/progress.json"), "w+") as f:
-                    json.dump({"epoch": "", "batch": batch_id, "acc": self.mov_avg_acc, "stage": "test"}, f)
-
             print(f"test batch {batch_id}")
             batch = copy.deepcopy(list(batch))
 
@@ -547,8 +534,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--num-networks', default="", type=str, help="Number of network instances to train")
+    
     args = vars(parser.parse_args())
     percentage_data = args['percentage_data']
+    num_networks = args['num_networks']
 
     batch_size = 1
     percentage_data = percentage_data
@@ -560,59 +550,55 @@ if __name__ == "__main__":
     threshold_sums = 100
     snr = 10.
 
-    experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                percentage=percentage_data,
-                                balance_ratio=balance_ratio,
-                                snr=snr,
-                                one_hot=False,
-                                num_filters=num_filters,
-                                downsample=downsample,
-                                is_tracking=False)
+    int_num_networks = 1
+    if(num_networks != ""):
+        int_num_networks = int(num_networks)
 
-    num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
-    num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
-    num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
+    for network_idx in range(int(num_networks)):
 
-    model = LSM(config=config,
-                num_epochs=1,
-                num_batches=num_train_batches,
-                num_labels=experiment.num_labels,
-                num_cores=8,
-                downsample=downsample,
-                num_filters=num_filters,
-                plot=False,
-                train=True,
-                fs=experiment.sampling_freq,
-                estimate_thresholds=True,
-                thresholds=thresholds,
-                threshold_0=threshold_0,
-                threshold_sums=threshold_sums,
-                num_val=1000)
+        experiment = HeySnipsDEMAND(batch_size=batch_size,
+                                    percentage=percentage_data,
+                                    balance_ratio=balance_ratio,
+                                    snr=snr,
+                                    one_hot=False,
+                                    num_filters=num_filters,
+                                    downsample=downsample,
+                                    is_tracking=False)
 
+        num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+        num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+        num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
-    experiment.set_model(model)
-    experiment.set_config({'num_train_batches': num_train_batches,
-                           'num_val_batches': num_val_batches,
-                           'num_test_batches': num_test_batches,
-                           'batch size': batch_size,
-                           'percentage data': percentage_data,
-                           'threshold': thresholds.tolist(),
-                           'threshold_0': threshold_0,
-                           'threshold_sums': threshold_sums,
-                           'snr': snr,
-                           'balance_ratio': balance_ratio,
-                           'model_config': config})
+        model = LSM(config=config,
+                    num_epochs=1,
+                    num_batches=num_train_batches,
+                    num_labels=experiment.num_labels,
+                    num_cores=8,
+                    downsample=downsample,
+                    num_filters=num_filters,
+                    plot=False,
+                    train=True,
+                    fs=experiment.sampling_freq,
+                    estimate_thresholds=True,
+                    thresholds=thresholds,
+                    threshold_0=threshold_0,
+                    threshold_sums=threshold_sums,
+                    network_idx=network_idx,
+                    num_val=1000)
 
 
-    experiment.start()
+        experiment.set_model(model)
+        experiment.set_config({'num_train_batches': num_train_batches,
+                            'num_val_batches': num_val_batches,
+                            'num_test_batches': num_test_batches,
+                            'batch size': batch_size,
+                            'percentage data': percentage_data,
+                            'threshold': thresholds.tolist(),
+                            'threshold_0': threshold_0,
+                            'threshold_sums': threshold_sums,
+                            'snr': snr,
+                            'balance_ratio': balance_ratio,
+                            'model_config': config})
 
-    print("experiment done")
 
-    model.save(os.path.join(model.base_path,"Resources/tmp_reservoir.json"))
-
-    model.keyword_peaks = np.array(model.keyword_peaks)
-    model.distractor_peaks = np.array(model.distractor_peaks)
-    model.keyword_streaks = np.array(model.keyword_streaks)
-    model.distractor_streaks = np.array(model.distractor_streaks)
-    model.keyword_sums = np.array(model.keyword_sums)
-    model.distractor_sums = np.array(model.distractor_sums)
+        experiment.start()

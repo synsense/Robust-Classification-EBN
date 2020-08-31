@@ -82,7 +82,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         self.mismatch_std = mismatch_std
 
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch/"
+        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -254,10 +254,10 @@ if __name__ == "__main__":
     num_trials = args['num_trials']
     network_idx = args['network_idx']
 
-    force_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies.npy'
-    force_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies_mismatch.npy'
-    force_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse.npy'
-    force_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse_mismatch.npy'
+    force_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies.npy'
+    force_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies_mismatch.npy'
+    force_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse.npy'
+    force_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse_mismatch.npy'
 
     if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path) and os.path.exists(force_mse_final_path) and os.path.exists(force_mse_mismatch_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

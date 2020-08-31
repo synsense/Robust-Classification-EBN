@@ -66,7 +66,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.mean_mse_original = 0.0
         self.mean_mse_mismatch = 0.0
 
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -279,10 +279,10 @@ if __name__ == "__main__":
     prefix = "_"
     if(use_fast):
         prefix = "_fast_"
-    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies.npy'
-    ads_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies_mismatch.npy'
-    ads_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse.npy'
-    ads_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse_mismatch.npy'
+    ads_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies.npy'
+    ads_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies_mismatch.npy'
+    ads_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse.npy'
+    ads_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse_mismatch.npy'
 
 
     if(os.path.exists(ads_orig_final_path) and os.path.exists(ads_mismatch_final_path) and os.path.exists(ads_mse_final_path) and os.path.exists(ads_mse_mismatch_final_path)):

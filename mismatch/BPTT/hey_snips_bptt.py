@@ -249,7 +249,6 @@ class HeySnipsNetworkADS(BaseModel):
     def train(self, data_loader, fn_metrics):
 
         self.best_model = self.net
-        was_lower = 0
 
         for epoch in range(self.num_epochs):
 
@@ -323,12 +322,9 @@ class HeySnipsNetworkADS(BaseModel):
 
                 # - Save model
                 self.save(self.model_path_bptt_net)
-                was_lower = 0
-            else:
-                was_lower += 1
 
             # - Early stopping
-            if(was_lower == 2):
+            if(val_acc > 87 and epoch > 15):
                 return
 
         # - End for epoch
@@ -423,6 +419,7 @@ class HeySnipsNetworkADS(BaseModel):
         correct = 0
         correct_rate = 0
         counter = 0
+        self.best_model = self.load_net(self.model_path_bptt_net)
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
         
@@ -496,7 +493,7 @@ if __name__ == "__main__":
     seed = args['seed']
 
 
-    batch_size = 25
+    batch_size = 10
     balance_ratio = 1.0
     snr = 10.
 

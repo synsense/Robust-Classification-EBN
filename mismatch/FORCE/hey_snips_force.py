@@ -262,7 +262,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.val_set()):
         
-            if(batch_id > 1000):
+            if(batch_id*data_loader.batch_size > 1000):
                 break
 
             filtered = onp.stack([s[0][1] for s in batch])
@@ -347,7 +347,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         counter = 0
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
-            if(batch_id > 1000):
+            if(batch_id*data_loader.batch_size > 1000):
                 break
         
             filtered = onp.stack([s[0][1] for s in batch])

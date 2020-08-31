@@ -169,7 +169,7 @@ class LSM(BaseModel):
 
         for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
 
-            if batch_id > 100:
+            if (batch_id*data_loader.batch_size > 100):
                 break
 
             counter += 1

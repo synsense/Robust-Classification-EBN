@@ -191,7 +191,20 @@ class HeySnipsNetworkADS(BaseModel):
         self.amplitude = 50 / self.tau_mem
 
     def save(self, fn):
-        return
+        savedict = self.net.to_dict()
+        savedict["best_val_acc"] = self.best_val_acc
+        savedict["best_boundary"] = self.best_boundary
+        savedict["threshold0"] = self.threshold0
+        with open(self.model_path_ads_net, "w") as f:
+            json.dump(savedict, f)
+            print("Saved net", flush=True)
+
+    def load(self, fn): 
+        with open(self.model_path_ads_net, "r") as f:
+            loaddict = json.load(f)
+            self.best_boundary = loaddict["best_boundary"]
+            self.threshold0 = loaddict["threshold0"]
+        return NetworkADS.load(self.model_path_ads_net)
 
     def get_data(self, filtered_batch):
         """
@@ -351,19 +364,12 @@ class HeySnipsNetworkADS(BaseModel):
             yield {"train_loss": epoch_loss}
 
             # - Validate...
-            val_acc, validation_recon_acc = self.perform_validation_set(data_loader=data_loader, fn_metrics=fn_metrics)
+            val_acc, _ = self.perform_validation_set(data_loader=data_loader, fn_metrics=fn_metrics)
 
             if(val_acc >= self.best_val_acc):
                 self.best_val_acc = val_acc
-                self.best_model = self.net
-                # - Save in temporary file
-                savedict = self.best_model.to_dict()
-                savedict["best_val_acc"] = self.best_val_acc
-                savedict["best_boundary"] = self.best_boundary
-                savedict["threshold0"] = self.threshold0
-                with open(self.model_path_ads_net, "w") as f:
-                    json.dump(savedict, f)
-                    print("Saved net", flush=True)
+                self.save(self.model_path_ads_net)
+                
 
 
     def perform_validation_set(self, data_loader, fn_metrics):
@@ -508,18 +514,12 @@ class HeySnipsNetworkADS(BaseModel):
         correct_rate = 0
         counter = 0
 
+        self.net = self.load(self.model_path_ads_net)
+
         for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
 
             if (batch_id * data_loader.batch_size >= self.num_test):
                 break
-
-            if(self.dry_run):
-                print("--------------------------------")
-                print("TESTING batch", batch_id)
-                print("true label", -1, "pred label", -1, "Rate label", -1)
-                print("--------------------------------")
-                counter += 1
-                continue
 
             # - Get input
             batched_audio_raw = np.stack([s[0][0] for s in batch])
@@ -534,17 +534,17 @@ class HeySnipsNetworkADS(BaseModel):
                 ts_spiking_in = TSContinuous(time_base, batched_spiking_in[idx])
 
                 if(self.verbose > 1):
-                    self.best_model.lyrRes.ts_target = batched_rate_net_dynamics[idx] # - Needed for plotting
+                    self.net.lyrRes.ts_target = batched_rate_net_dynamics[idx] # - Needed for plotting
 
                 # - Evolve...
-                test_sim = self.best_model.evolve(ts_input=ts_spiking_in, verbose=self.verbose)
-                self.best_model.reset_all()
+                test_sim = self.net.evolve(ts_input=ts_spiking_in, verbose=self.verbose)
+                self.net.reset_all()
 
                 # - Get the output
                 out_test = test_sim["output_layer_0"].samples
 
                 if(self.verbose > 1):
-                    self.best_model.lyrRes.ts_target = None
+                    self.net.lyrRes.ts_target = None
 
                 # - Compute the final output
                 final_out = out_test @ self.w_out

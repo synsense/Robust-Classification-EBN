@@ -63,7 +63,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.time_base = onp.arange(0, 5.0, self.dt)
         self.network_idx = network_idx
 
-        self.base_path = "/home/julian_synsense_ai/Documents/RobustClassificationWithEBNs/mismatch/"
+        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/"
 
         self.network_name = f"Resources/force{self.network_idx}.json"
 

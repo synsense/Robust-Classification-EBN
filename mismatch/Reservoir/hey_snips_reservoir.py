@@ -230,36 +230,19 @@ class LSM(BaseModel):
         for sample_id, [sample, tgt_label, tgt_signal] in enumerate(batch):
             duration = len(sample) / self.fs
 
-            act_ = ts_out(times_filt)
-            act_[np.where(np.isnan(act_))[0]] = 0.
 
-            #act_ = self.smooth(act_.copy(), 500)
+            # - Compute the integral for the points that lie above threshold0
+            integral_final_out = np.copy(ts_out.samples)
+            integral_final_out[integral_final_out < self.threshold_0] = 0.0
+            for t,val in enumerate(integral_final_out):
+                if(val > 0.0):
+                    integral_final_out[t] = val + integral_final_out[t-1]
 
-            peak = np.max(act_)
-
-            act_[np.where(act_ < self.threshold_0)] = 0.
-
-            for t, elmt in enumerate(act_):
-                if elmt > 0:
-                    act_[t] += act_[t-1]
-
-            if np.max(act_[:]) > self.threshold_sums:
+            predicted_label = 0
+            if(np.max(integral_final_out) > self.threshold_sums):
                 predicted_label = 1
-            else:
-                predicted_label = 0
 
-            print("Target", tgt_label, "Predicted", predicted_label, np.max(act_),flush=True)
-
-
-            if dataset == 'val':
-                if tgt_label == 1:
-                    self.keyword_peaks.append(peak)
-                    #self.keyword_streaks.append(longest_streak)
-                    self.keyword_sums.append(np.max(act_))
-                else:
-                    self.distractor_peaks.append(peak)
-                    #self.distractor_streaks.append(longest_streak)
-                    self.distractor_sums.append(np.max(act_))
+            print("Target", tgt_label, "Predicted", predicted_label ,flush=True)
 
             self.mov_avg_acc = self.mov_avg_acc * self.num_samples + int(predicted_label == tgt_label)
             self.num_samples += 1
@@ -275,7 +258,7 @@ class LSM(BaseModel):
             true_labels.append(tgt_label)
             predicted_labels.append(predicted_label)
             true_tgt_signals.append(tgt_signal)
-            predicted_tgt_signals.append(act_)
+            predicted_tgt_signals.append(ts_out.samples)
 
 
         if self.plot:
@@ -303,7 +286,6 @@ class LSM(BaseModel):
             self.valid_firing = False
 
     def train(self, data_loader, fn_metrics):
-
 
         for epoch in range(self.num_epochs):
 

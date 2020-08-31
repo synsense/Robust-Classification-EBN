@@ -311,8 +311,7 @@ class LSM(BaseModel):
             self.num_samples = 0
 
             if self.use_train:
-                fn_init = os.path.join(self.base_path, f"Resources/init_snips_{self.num_channels}_{self.num_neurons}.json")
-                if epoch == 0 and type(self.config) is dict and not os.path.exists(fn_init):
+                if epoch == 0 and type(self.config) is dict:
                     print("DETERMINE INPUT PROJECTIONS",flush=True)
                     # determine input weights
                     duration = 1.0
@@ -368,15 +367,10 @@ class LSM(BaseModel):
                     data_loader.snr = tmp_snr
                     data_loader.train_set.current_idx = 0
 
-                    self.save(fn_init)
+                    # self.save(fn_init)
                 elif type(self.config) is dict:
-
-                    # get input weights from init_snips
-                    with open(fn_init, "r") as f:
-                        w_in = np.array(json.load(f)['layers'][2]['weights_in'])
-                        w_in /= np.max(w_in)
-                        w_in *= config['wInpRecMean']
-                        self.lyr_res.weights_in = w_in
+                    print("Do not use pre-initialized dict")
+                    sys.exit(0)
 
                 # train loop
                 t0 = time.time()

@@ -51,7 +51,6 @@ class HeySnipsNetworkADS(BaseModel):
         super(HeySnipsNetworkADS, self).__init__(name,version)
 
         self.verbose = verbose
-        self.num_distinct_weights = discretize
         self.fs = fs
         self.dt = 0.001
 

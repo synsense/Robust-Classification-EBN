@@ -150,7 +150,7 @@ class HeySnipsNetworkADS(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if(batch_id > 0):
+            if(batch_id > 3):
                 break
         
             filtered = onp.stack([s[0][1] for s in batch])
@@ -240,7 +240,7 @@ if __name__ == "__main__":
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    batch_size = 100
+    batch_size = 25
     balance_ratio = 1.0
     snr = 10.
 

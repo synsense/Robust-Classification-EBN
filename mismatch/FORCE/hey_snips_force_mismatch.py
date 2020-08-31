@@ -158,7 +158,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if(batch_id > 0):
+            if(batch_id > 3):
                 break
         
             filtered = onp.stack([s[0][1] for s in batch])
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     final_array_mse_original = onp.zeros((len(mismatch_stds), num_trials))
     final_array_mse_mismatch = onp.zeros((len(mismatch_stds), num_trials))
 
-    batch_size = 100
+    batch_size = 25
     balance_ratio = 1.0
     snr = 10.
 

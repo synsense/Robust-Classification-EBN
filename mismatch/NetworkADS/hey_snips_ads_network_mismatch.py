@@ -48,6 +48,7 @@ class HeySnipsNetworkADS(BaseModel):
                  use_fast,
                  fs=16000.,
                  verbose=0,
+                 network_idx="",
                  name="Snips ADS",
                  version="1.0"):
         
@@ -89,7 +90,8 @@ class HeySnipsNetworkADS(BaseModel):
                                              name="hidden")
 
         # - Create NetworkADS
-        model_path_ads_net_full = os.path.join(self.base_path, "../figure2/Resources/hey_snips.json") # - Use the model from figure2
+        network_name = f"Resources/ads{network_idx}.json"
+        model_path_ads_net_full = os.path.join(self.base_path, network_name) # - Use the model from figure2
 
         if(self.use_fast):
             model_path_ads_net_full = os.path.join(self.base_path, "../suddenNeuronDeath/Resources/hey_snips_fast.json")
@@ -266,19 +268,21 @@ if __name__ == "__main__":
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
     parser.add_argument('--use-fast', default=False, action="store_true", help="Use network trained with fast connections")
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     num_trials = args['num_trials']
     use_fast = args['use_fast']
+    network_idx = args['network_idx']
 
     prefix = "_"
     if(use_fast):
         prefix = "_fast_"
-    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{prefix}test_accuracies.npy'
-    ads_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{prefix}test_accuracies_mismatch.npy'
-    ads_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{prefix}mse.npy'
-    ads_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{prefix}mse_mismatch.npy'
+    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies.npy'
+    ads_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies_mismatch.npy'
+    ads_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse.npy'
+    ads_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse_mismatch.npy'
 
 
     if(os.path.exists(ads_orig_final_path) and os.path.exists(ads_mismatch_final_path) and os.path.exists(ads_mse_final_path) and os.path.exists(ads_mse_mismatch_final_path)):
@@ -312,14 +316,15 @@ if __name__ == "__main__":
                                     randomize_after_epoch=True,
                                     downsample=1000,
                                     is_tracking=False,
-                                    one_hot=False)
+                                    one_hot=False,
+                                    cache_folder=None)
 
             num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
             num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
             num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
             model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
-                                        mismatch_std=mismatch_std, use_fast = use_fast, verbose=verbose)
+                                        mismatch_std=mismatch_std, use_fast = use_fast, verbose=verbose, network_idx=network_idx)
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,

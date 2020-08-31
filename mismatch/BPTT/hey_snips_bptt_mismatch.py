@@ -62,6 +62,7 @@ class HeySnipsNetworkADS(BaseModel):
                  mismatch_std,
                  fs=16000.,
                  verbose=0,
+                 network_idx="",
                  name="Snips ADS",
                  version="1.0"):
         
@@ -106,7 +107,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.lr_state = self.rate_layer._state
 
         # - Create spiking net
-        model_path_bptt_net = os.path.join(self.base_path,"Resources/bptt.json")
+        model_path_bptt_net = os.path.join(self.base_path, f"Resources/bptt{network_idx}.json")
         if(os.path.exists(model_path_bptt_net)):
             self.net = self.load_net(model_path_bptt_net)
             self.net_mismatch = apply_mismatch(self.net, std_p=self.mismatch_std)
@@ -218,25 +219,27 @@ class HeySnipsNetworkADS(BaseModel):
 
 if __name__ == "__main__":
 
-    bptt_orig_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/bptt_test_accuracies.npy'
-    bptt_mismatch_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/bptt_test_accuracies_mismatch.npy'
-
-    if(os.path.exists(bptt_orig_final_path) and os.path.exists(bptt_mismatch_final_path)):
-        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
-
     onp.random.seed(42)
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     
     args = vars(parser.parse_args())
     verbose = args['verbose']
     percentage_data = args['percentage_data']
     num_trials = args['num_trials']
-    
+    network_idx = args['network_idx']
+
+    bptt_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies.npy'
+    bptt_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies_mismatch.npy'
+
+    if(os.path.exists(bptt_orig_final_path) and os.path.exists(bptt_mismatch_final_path)):
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
+
     batch_size = 100
     balance_ratio = 1.0
     snr = 10.
@@ -258,13 +261,14 @@ if __name__ == "__main__":
                                 randomize_after_epoch=True,
                                 downsample=1000,
                                 is_tracking=False,
+                                cache_folder=None,
                                 one_hot=False)
             
             num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
             num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
             num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
 
-            model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels, mismatch_std=mismatch_std, verbose=verbose)
+            model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels, mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,

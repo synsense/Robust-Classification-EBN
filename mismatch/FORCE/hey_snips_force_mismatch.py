@@ -55,15 +55,6 @@ def apply_mismatch(force_layer, std_p=0.2):
                             tau_mem = tau_mem,
                             tau_syn = tau_syn)
 
-
-    # plt.subplot(311)
-    # plt.hist(force_layer_mismatch.v_thresh, bins=50); plt.title("Bias")
-    # plt.subplot(312)
-    # plt.hist(force_layer_mismatch.tau_syn, bins=50); plt.title("Tau syn")
-    # plt.subplot(313)
-    # plt.hist(force_layer_mismatch.tau_mem, bins=50); plt.title("Tau mem")
-    # plt.show()
-
     return force_layer_mismatch
 
 class HeySnipsNetworkFORCE(BaseModel):
@@ -72,6 +63,7 @@ class HeySnipsNetworkFORCE(BaseModel):
                  fs=16000.,
                  verbose=0,
                  mismatch_std=0.2,
+                 network_idx="",
                  name="Snips FORCE",
                  version="1.0"):
         
@@ -120,7 +112,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.lr_state = self.rate_layer._state
 
         # - Create spiking net
-        model_path_force_net = os.path.join(self.base_path,"Resources/force.json")
+        model_path_force_net = os.path.join(self.base_path, f"Resources/force{network_idx}.json")
         if(os.path.exists(model_path_force_net)):
             self.force_layer_original = self.load_net(model_path_force_net)
             self.force_layer_mismatch = apply_mismatch(self.force_layer_original, std_p=self.mismatch_std)
@@ -250,24 +242,26 @@ class HeySnipsNetworkFORCE(BaseModel):
 
 if __name__ == "__main__":
 
-    force_orig_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_test_accuracies.npy'
-    force_mismatch_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_test_accuracies_mismatch.npy'
-    force_mse_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_mse.npy'
-    force_mse_mismatch_final_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force_mse_mismatch.npy'
-
-    if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path) and os.path.exists(force_mse_final_path) and os.path.exists(force_mse_mismatch_final_path)):
-        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
-
     onp.random.seed(42)
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials that this experiment is repeated for every mismatch_std")
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     num_trials = args['num_trials']
+    network_idx = args['network_idx']
+
+    force_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies.npy'
+    force_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies_mismatch.npy'
+    force_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse.npy'
+    force_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse_mismatch.npy'
+
+    if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path) and os.path.exists(force_mse_final_path) and os.path.exists(force_mse_mismatch_final_path)):
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
     mismatch_stds = [0.05, 0.2, 0.3]
     final_array_original = onp.zeros((len(mismatch_stds), num_trials))
@@ -296,13 +290,14 @@ if __name__ == "__main__":
                                     randomize_after_epoch=True,
                                     downsample=1000,
                                     is_tracking=False,
-                                    one_hot=False)
+                                    one_hot=False,
+                                    cache_folder=None)
 
             num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
             num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
             num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
 
-            model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,mismatch_std=mismatch_std,verbose=verbose)
+            model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,mismatch_std=mismatch_std,verbose=verbose, network_idx=network_idx)
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,

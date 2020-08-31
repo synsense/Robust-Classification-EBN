@@ -30,6 +30,7 @@ class LSM(BaseModel):
                 mismatch_std:float = 0.2,
                 threshold_0: float = 0.3,
                 threshold_sums: float = 5000.,
+                network_idx="",
                 name="ReservoirSnips",
                 version="0.1"):
 
@@ -42,7 +43,7 @@ class LSM(BaseModel):
         self.acc_mismatch = 0.0
 
         # - Create network
-        network_path = os.path.join(os.getcwd(), "../Resources/reservoir.json")
+        network_path = os.path.join(os.getcwd(), f"../Resources/reservoir{network_idx}.json")
 
         with open(network_path, "r") as f:
             config_dict = json.load(f)
@@ -202,21 +203,16 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    reservoir_orig_final_path = os.path.join(os.getcwd(), "../Resources/Plotting/reservoir_test_accuracies.npy")
-    reservoir_mismatch_final_path = os.path.join(os.getcwd(), "../Resources/Plotting/reservoir_test_accuracies_mismatch.npy")
-
-    if(os.path.exists(reservoir_orig_final_path) and os.path.exists(reservoir_mismatch_final_path)):
-        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
-
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
-    parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
-    
+    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+
     args = vars(parser.parse_args())
     percentage_data = args['percentage_data']
     num_trials = args['num_trials']
+    network_idx = args['network_idx']
 
     batch_size = 1
     balance_ratio = 1.0
@@ -229,10 +225,12 @@ if __name__ == "__main__":
     final_array_original = np.zeros((len(mismatch_stds), num_trials))
     final_array_mismatch = np.zeros((len(mismatch_stds), num_trials))
 
-    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--num-trials', default=10, type=int, help="Number of trials this experiment is repeated")
-    args = vars(parser.parse_args())
-    num_trials = args['num_trials']
+    reservoir_orig_final_path = os.path.join(os.getcwd(), f"../Resources/Plotting/{network_idx}reservoir_test_accuracies.npy")
+    reservoir_mismatch_final_path = os.path.join(os.getcwd(), f"../Resources/Plotting/{network_idx}reservoir_test_accuracies_mismatch.npy")
+
+    if(os.path.exists(reservoir_orig_final_path) and os.path.exists(reservoir_mismatch_final_path)):
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
     for idx,mismatch_std in enumerate(mismatch_stds):
 
@@ -249,7 +247,8 @@ if __name__ == "__main__":
                                         one_hot=False,
                                         num_filters=num_filters,
                                         downsample=downsample,
-                                        is_tracking=False)
+                                        is_tracking=False,
+                                        cache_folder=None)
 
             num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
             num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
@@ -258,7 +257,8 @@ if __name__ == "__main__":
             model = LSM(downsample=downsample,
                         mismatch_std=mismatch_std,
                         threshold_0=threshold_0,
-                        threshold_sums=threshold_sums)
+                        threshold_sums=threshold_sums,
+                        network_idx=network_idx)
 
 
             experiment.set_model(model)

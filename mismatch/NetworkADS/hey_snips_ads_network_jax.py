@@ -66,7 +66,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.num_targets = len(labels)
         self.time_base = onp.arange(0,5.0,self.dt)
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/"
+        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:

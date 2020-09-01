@@ -244,7 +244,7 @@ class HeySnipsNetworkADS(BaseModel):
                 
                 batched_output = self.ads_layer.train_output_target(ts_input=batched_spiking_in,
                                                                         ts_target=batched_rate_net_dynamics,
-                                                                        eta=f_eta(num_signal_iterations, a_eta, b_eta),
+                                                                        eta=0.00001,
                                                                         k=f_k(num_signal_iterations),
                                                                         num_timesteps=filtered.shape[1])
 

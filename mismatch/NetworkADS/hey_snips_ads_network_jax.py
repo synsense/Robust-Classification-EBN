@@ -97,6 +97,9 @@ class HeySnipsNetworkADS(BaseModel):
         if(os.path.exists(self.model_path_ads_net)):
             print("Loaded pretrained network from %s" % self.model_path_ads_net)
             sys.exit(0)
+            # self.ads_layer = self.load(self.model_path_ads_net)
+            # self.tau_mem = self.ads_layer.tau_mem[0]
+            # self.Nc = self.ads_layer.weights_in.shape[0]
         else:
             self.Nc = self.num_rate_neurons
             self.num_neurons = num_neurons
@@ -104,8 +107,7 @@ class HeySnipsNetworkADS(BaseModel):
             print("Building network with N: %d Nc: %d" % (self.num_neurons,self.Nc))
 
             lambda_d = 20
-            lambda_v = 20
-            self.tau_mem = 1/ lambda_v
+            self.tau_mem = 0.05
             self.tau_slow = tau_slow
             self.tau_out = tau_out
             tau_syn_fast = 0.001
@@ -244,9 +246,10 @@ class HeySnipsNetworkADS(BaseModel):
                 
                 batched_output = self.ads_layer.train_output_target(ts_input=batched_spiking_in,
                                                                         ts_target=batched_rate_net_dynamics,
-                                                                        eta=f_eta(num_signal_iterations, a_eta, b_eta),
+                                                                        eta=0.00001,
                                                                         k=f_k(num_signal_iterations),
                                                                         num_timesteps=filtered.shape[1])
+
 
                 for idx in range(batched_output.shape[0]):
                     target_val = batched_rate_net_dynamics[idx]
@@ -338,7 +341,7 @@ class HeySnipsNetworkADS(BaseModel):
             _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
             batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
 
-            for idx in range(batched_output.shape[0]):
+            for idx in range(len(target_labels)):
                 # - Get the output
                 out_val = batched_output[idx]
                 target_val = batched_rate_net_dynamics[idx]
@@ -429,8 +432,6 @@ class HeySnipsNetworkADS(BaseModel):
     def test(self, data_loader, fn_metrics):
 
         integral_pairs = []
-        correct = correct_rate = counter = 0
-
         # - Load the best model
         self.ads_layer = self.load(self.model_path_ads_net)
 
@@ -449,7 +450,7 @@ class HeySnipsNetworkADS(BaseModel):
             _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
             batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
 
-            for idx in range(batched_output.shape[0]):
+            for idx in range(len(target_labels)):
 
                 # - Get the output
                 out_test = batched_output[idx]

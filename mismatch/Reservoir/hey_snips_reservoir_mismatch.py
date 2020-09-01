@@ -2,7 +2,7 @@ from rockpool.networks import network
 from rockpool.timeseries import TSContinuous, TSEvent
 from reservoir import createNetwork
 import time
-import json
+import ujson as json
 import numpy as np
 import copy
 from matplotlib import pyplot as plt
@@ -28,8 +28,6 @@ class LSM(BaseModel):
     def __init__(self,
                 downsample:int,
                 mismatch_std:float = 0.2,
-                threshold_0: float = 0.3,
-                threshold_sums: float = 5000.,
                 network_idx="",
                 name="ReservoirSnips",
                 version="0.1"):
@@ -37,8 +35,8 @@ class LSM(BaseModel):
         super(LSM, self).__init__(name, version)
 
         self.downsample = downsample 
-        self.threshold_0 = threshold_0
-        self.threshold_sums = threshold_sums
+        self.threshold_0 = 0.5
+        self.threshold_sums = 10
         self.acc_original = 0.0
         self.acc_mismatch = 0.0
 
@@ -47,6 +45,8 @@ class LSM(BaseModel):
 
         with open(network_path, "r") as f:
             config_dict = json.load(f)
+            self.threshold_0 = config_dict.pop("threshold0")
+            self.threshold_sums = config_dict.pop("best_boundary")
             layers_ = []
             for lyr_conf in config_dict['layers']:
                 cls = getattr(layers, lyr_conf["class_name"])
@@ -130,27 +130,27 @@ class LSM(BaseModel):
 
         for sample_id, [sample, tgt_label, tgt_signal] in enumerate(batch):
             
-            act_ = ts_out(times_filt)
-            act_[np.where(np.isnan(act_))[0]] = 0.
-            act_[np.where(act_ < self.threshold_0)] = 0.
-            for t, elmt in enumerate(act_):
-                if elmt > 0:
-                    act_[t] += act_[t-1]
-            if np.max(act_[:]) > self.threshold_sums:
-                predicted_label = 1
-            else:
-                predicted_label = 0
+            # - Compute the integral for the points that lie above threshold0
+            integral_final_out = np.copy(ts_out.samples)
+            integral_final_out[integral_final_out < self.threshold_0] = 0.0
+            for t,val in enumerate(integral_final_out):
+                if(val > 0.0):
+                    integral_final_out[t] = val + integral_final_out[t-1]
 
-            act_mismatch = ts_out_mismatch(times_filt)
-            act_mismatch[np.where(np.isnan(act_mismatch))[0]] = 0.
-            act_mismatch[np.where(act_mismatch < self.threshold_0)] = 0.
-            for t, elmt in enumerate(act_mismatch):
-                if elmt > 0:
-                    act_mismatch[t] += act_mismatch[t-1]
-            if np.max(act_mismatch[:]) > self.threshold_sums:
+            predicted_label = 0
+            if(np.max(integral_final_out) > self.threshold_sums):
+                predicted_label = 1
+
+            # - Mismatch
+            integral_final_out_mismatch = np.copy(ts_out_mismatch.samples)
+            integral_final_out_mismatch[integral_final_out_mismatch < self.threshold_0] = 0.0
+            for t,val in enumerate(integral_final_out_mismatch):
+                if(val > 0.0):
+                    integral_final_out_mismatch[t] = val + integral_final_out_mismatch[t-1]
+
+            predicted_label_mismatch = 0
+            if(np.max(integral_final_out_mismatch) > self.threshold_sums):
                 predicted_label_mismatch = 1
-            else:
-                predicted_label_mismatch = 0
 
             true_labels.append(tgt_label)
             predicted_labels.append(predicted_label)
@@ -218,8 +218,6 @@ if __name__ == "__main__":
     balance_ratio = 1.0
     downsample = 200 
     num_filters = 16
-    threshold_0 = 0.30
-    threshold_sums = 3500 / 16000 * downsample 
     snr = 10.
     mismatch_stds = [0.05, 0.2, 0.3]
     final_array_original = np.zeros((len(mismatch_stds), num_trials))
@@ -256,8 +254,6 @@ if __name__ == "__main__":
 
             model = LSM(downsample=downsample,
                         mismatch_std=mismatch_std,
-                        threshold_0=threshold_0,
-                        threshold_sums=threshold_sums,
                         network_idx=network_idx)
 
 
@@ -267,8 +263,6 @@ if __name__ == "__main__":
                                 'num_test_batches': num_test_batches,
                                 'batch size': batch_size,
                                 'percentage data': percentage_data,
-                                'threshold_0': threshold_0,
-                                'threshold_sums': threshold_sums,
                                 'snr': snr,
                                 'balance_ratio': balance_ratio})
 

@@ -2,7 +2,7 @@ from rockpool.networks import network
 from rockpool.timeseries import TSContinuous, TSEvent
 from reservoir import createNetwork
 import time
-import json
+import ujson as json
 import numpy as np
 import copy
 from matplotlib import pyplot as plt
@@ -37,8 +37,8 @@ class LSM(BaseModel):
                  num_cores: int = 1,
                  plot: bool = False,
                  thresholds: list = [1., 1., 1.],
-                 threshold_0: float= 0.3,
-                 threshold_sums: float = 5000.,
+                 threshold_0: float= 0.5,
+                 threshold_sums: float = 10.,
                  estimate_thresholds=False,
                  num_val=np.Inf,
                  network_idx="",
@@ -135,54 +135,13 @@ class LSM(BaseModel):
             lyr_confs.append(self.lyr_inp.to_dict())
             lyr_confs.append(self.lyr_res.to_dict())
             lyr_confs.append(self.lyr_out.to_dict())
+            save_dict = {}
+            save_dict["layers"] = lyr_confs
+            save_dict["threshold0"] = self.threshold_0
+            save_dict["best_boundary"] = self.threshold_sums
             # self.net.save(fn)
             with open(fn, "w+") as f:
-                json.dump({"layers": lyr_confs}, f)
-
-
-    def plot_activity(self, ts_ext, ts_filt, ts_inp, ts_res, ts_out, ts_tgt):
-
-        fig = plt.figure(figsize=[16, 11])
-        ax1 = fig.add_subplot(5, 1, 1)
-        ts_ext.plot()
-        ax1.set_xlabel("")
-        ax1.set_ylabel("Amplitude")
-        ax1.set_title("Raw audio input")
-
-        ax2 = fig.add_subplot(5, 1, 2, sharex=ax1)
-        ts_filt.plot()
-        ax2.set_xlabel("")
-        ax2.set_ylabel("Channel")
-        ax2.set_title("Filter response")
-
-        ax3 = fig.add_subplot(5, 1, 3, sharex=ax1)
-        ts_inp.plot(s=1.)
-        ax3.set_xlabel("")
-        ax3.set_title("Spike converted filter response")
-        ax3.set_ylabel("Channel")
-
-        plt.tight_layout()
-        ax4 = fig.add_subplot(5, 1, 4, sharex=ax1)
-        ts_res.plot(s=1.)
-        ax4.set_xlabel("")
-        ax4.set_ylabel("Neuron Id")
-
-
-        ax5 = fig.add_subplot(5, 1, 5, sharex=ax1)
-        ax5.set_title("Output and target")
-        ax5.set_prop_cycle(None)
-        ax5.set_xlabel("Time (s)")
-        #ts_out.plot()
-        plt.plot(ts_out.times, ts_out.samples)
-        ax5.set_prop_cycle(None)
-        plt.plot(ts_tgt.times, ts_tgt.samples, '--')
-        ax5.set_ylim([-0.2, 1.2])
-
-        #ax5.set_xticklabels(np.arange(ts_ext.t_start, ts_ext.t_stop, 0.1))
-
-        #ts_tgt.plot()
-
-        plt.show(block=True)
+                json.dump(save_dict, f)
 
     def smooth(self, y, box_pts):
         box = np.ones(box_pts)/box_pts
@@ -261,15 +220,6 @@ class LSM(BaseModel):
             predicted_tgt_signals.append(ts_out.samples)
 
 
-        if self.plot:
-            self.plot_activity(ts_ext,
-                               ts_filter,
-                               ts_inp,
-                               ts_res,
-                               ts_out,
-                               ts_tgt_batch)
-
-
         return np.array(true_labels), \
                np.array(predicted_labels), \
                list(true_tgt_signals), \
@@ -286,6 +236,8 @@ class LSM(BaseModel):
             self.valid_firing = False
 
     def train(self, data_loader, fn_metrics):
+
+        self.save(self.model_reservoir_path)
 
         for epoch in range(self.num_epochs):
 
@@ -530,7 +482,7 @@ if __name__ == "__main__":
     num_filters = 16
     thresholds = np.array([1., 10.0, 1.])
     threshold_0 = 0.50
-    threshold_sums = 100
+    threshold_sums = 10
     snr = 10.
 
     experiment = HeySnipsDEMAND(batch_size=batch_size,

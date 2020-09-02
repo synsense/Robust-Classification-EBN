@@ -158,7 +158,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if(batch_id*data_loader.batch_size > 100):
+            if(batch_id*data_loader.batch_size >= 100):
                 break
         
             filtered = onp.stack([s[0][1] for s in batch])
@@ -225,7 +225,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
                 print("--------------------", flush=True)
                 print("Batch", batch_id, "Idx", idx , flush=True)
-                print("TESTING: True:", target_labels[idx], "Predicted:", predicted_label, "Predicted MISMATCH", predicted_label_mismatch, "Rate:", predicted_rate_label, flush=True)
+                print("Mismatch std:", self.mismatch_std, "TESTING: True:", target_labels[idx], "Predicted:", predicted_label, "Predicted MISMATCH", predicted_label_mismatch, "Rate:", predicted_rate_label, flush=True)
                 print("--------------------", flush=True)
 
 

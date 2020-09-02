@@ -1,6 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore')
-import json
+import ujson as json
 import numpy as np
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
@@ -9,12 +9,12 @@ matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
 import matplotlib.pyplot as plt
+from jax import vmap
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from rockpool.timeseries import TSContinuous
 from rockpool import layers
-from rockpool.layers import ButterMelFilter, RecRateEulerJax_IO, H_tanh
-from rockpool.networks import NetworkADS
+from rockpool.layers import ButterMelFilter, RecRateEulerJax_IO, H_tanh, JaxADS
 import os
 import sys
 if not sys.warnoptions:
@@ -31,21 +31,37 @@ directory_name = os.path.dirname(absolute_path)
 os.chdir(directory_name)
 
 
-def apply_mismatch(ads_net, mismatch_std=0.2):
-    mismatch_ads_net = deepcopy(ads_net)
-    N = mismatch_ads_net.lyrRes.weights.shape[0]
-    mismatch_ads_net.lyrRes.tau_syn_r_slow = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_net.lyrRes.tau_syn_r_slow) + np.mean(ads_net.lyrRes.tau_syn_r_slow))
-    mismatch_ads_net.lyrRes.tau_mem = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_net.lyrRes.tau_mem) + np.mean(ads_net.lyrRes.tau_mem))
-    mismatch_ads_net.lyrRes.v_thresh = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_net.lyrRes.v_thresh) + np.mean(ads_net.lyrRes.v_thresh))
-    return mismatch_ads_net
+def apply_mismatch(ads_layer, mismatch_std=0.2):
+    N = ads_layer.weights_slow.shape[0]
+    new_tau_slow = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_syn_r_slow) + np.mean(ads_layer.tau_syn_r_slow))
+    new_tau_mem = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_mem) + np.mean(ads_layer.tau_mem))
+    new_v_thresh = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.v_thresh) + np.mean(ads_layer.v_thresh))
+    
+    # - Create new ads_layer
+    mismatch_ads_layer = JaxADS(weights_in = ads_layer.weights_in,
+                                    weights_out = ads_layer.weights_out,
+                                    weights_fast = ads_layer.weights_fast,
+                                    weights_slow = ads_layer.weights_slow,
+                                    eta = ads_layer.eta,
+                                    k = ads_layer.k,
+                                    noise_std = ads_layer.noise_std,
+                                    dt = ads_layer.dt,
+                                    bias = ads_layer.bias,
+                                    v_thresh = new_v_thresh,
+                                    v_reset = ads_layer.v_reset,
+                                    v_rest = ads_layer.v_rest,
+                                    tau_mem = new_tau_mem,
+                                    tau_syn_r_fast = ads_layer.tau_syn_r_fast,
+                                    tau_syn_r_slow = new_tau_slow,
+                                    tau_syn_r_out = ads_layer.tau_syn_r_out,
+                                    t_ref = ads_layer.t_ref)
 
-
+    return mismatch_ads_layer
 
 class HeySnipsNetworkADS(BaseModel):
     def __init__(self,
                  labels,
                  mismatch_std,
-                 use_fast,
                  fs=16000.,
                  verbose=0,
                  network_idx="",
@@ -58,7 +74,6 @@ class HeySnipsNetworkADS(BaseModel):
         self.fs = fs
         self.dt = 0.001
         self.mismatch_std = mismatch_std
-        self.use_fast = use_fast
 
         self.num_targets = len(labels)
         self.test_acc_original = 0.0
@@ -67,6 +82,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.mean_mse_mismatch = 0.0
 
         self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -78,6 +94,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.bias = config['bias']
         self.tau_rate = config['tau']
         self.N_out = self.w_out.shape[1]
+        self.time_base = np.arange(0.0, 5.0, self.dt)
 
         self.rate_layer = RecRateEulerJax_IO(w_in=self.w_in,
                                              w_recurrent=self.w_rec,
@@ -90,29 +107,29 @@ class HeySnipsNetworkADS(BaseModel):
                                              name="hidden")
 
         # - Create NetworkADS
-        network_name = f"Resources/ads{network_idx}.json"
-        model_path_ads_net_full = os.path.join(self.base_path, network_name) # - Use the model from figure2
+        network_name = f"Resources/jax_ads{network_idx}.json"
+        self.model_path_ads_net = os.path.join(self.base_path, network_name)
 
-        if(self.use_fast):
-            model_path_ads_net_full = os.path.join(self.base_path, "../suddenNeuronDeath/Resources/hey_snips_fast.json")
+        if(os.path.exists(self.model_path_ads_net)):
+            print("Loading network...")
 
-        if(os.path.exists(model_path_ads_net_full)):
-            print("Loading networks...")
+            self.ads_layer = self.load(self.model_path_ads_net)
+            self.tau_mem = self.ads_layer.tau_mem[0]
+            self.Nc = self.ads_layer.weights_in.shape[0]
 
-            self.net_full = NetworkADS.load(model_path_ads_net_full)
-            self.Nc = self.net_full.lyrRes.weights_in.shape[0]
-            self.amplitude = 50 / np.mean(self.net_full.lyrRes.tau_mem) 
-            
-            with open(model_path_ads_net_full, "r") as f:
-                loaddict = json.load(f)
-                self.bb_full = loaddict["best_boundary"]
-                self.t0_full = loaddict["threshold0"]
-
-            self.net_mismatch = apply_mismatch(self.net_full, mismatch_std=self.mismatch_std)
+            self.ads_layer_mismatch = apply_mismatch(self.ads_layer, mismatch_std=self.mismatch_std)
+            self.amplitude = 50 / self.tau_mem
 
         else:
             assert(False), "Some network file was not found"
 
+    def load(self, fn):
+        with open(fn, "r") as f:
+            loaddict = json.load(f)
+        self.threshold0 = loaddict.pop("threshold0")
+        self.best_val_acc = loaddict.pop("best_val_acc")
+        self.best_boundary = loaddict.pop("best_boundary")
+        return JaxADS.load_from_dict(loaddict)
 
     def save(self, fn):
         return
@@ -148,22 +165,22 @@ class HeySnipsNetworkADS(BaseModel):
     def train(self, data_loader, fn_metrics):
         yield {"train_loss": 0.0}
 
-    def get_prediction(self, final_out, net, boundary, threshold_0):
+    def get_prediction(self, final_out):
         integral_final_out = np.copy(final_out)
-        integral_final_out[integral_final_out < threshold_0] = 0.0
+        integral_final_out[integral_final_out < self.threshold0] = 0.0
         for t,val in enumerate(integral_final_out):
             if(val > 0.0):
                 integral_final_out[t] = val + integral_final_out[t-1]
 
         # - Get final prediction using the integrated response
         predicted_label = 0
-        if(np.max(integral_final_out) > boundary):
+        if(np.max(integral_final_out) > self.best_boundary):
             predicted_label = 1
         return predicted_label
 
     def test(self, data_loader, fn_metrics):
 
-        correct_full = correct_mismatch = correct_rate = counter = sum_error_original = sum_error_mismatch = 0
+        correct = correct_mismatch = correct_rate = counter = sum_error_original = sum_error_mismatch = 0
 
         for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
 
@@ -176,37 +193,29 @@ class HeySnipsNetworkADS(BaseModel):
             tgt_signals = np.stack([s[2] for s in batch])
             (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
 
+            _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
+            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
+
+            _, _, states_t_mismatch = vmap(self.ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_mismatch._pack(), False, batched_spiking_in)
+            batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1)
+
+
             for idx in range(len(batch)):
-                # - Prepare the input
-                time_base = np.arange(0,int(len(batched_spiking_in[idx])*self.dt),self.dt)
-                ts_spiking_in = TSContinuous(time_base, batched_spiking_in[idx])
-
-                if(self.verbose > 1):
-                    self.net_full.lyrRes.ts_target = TSContinuous(time_base, batched_rate_net_dynamics[idx]) # - Needed for plotting
-                    self.net_mismatch.lyrRes.ts_target = TSContinuous(time_base, batched_rate_net_dynamics[idx])
-
-                # - Evolve...
-                test_sim_full = self.net_full.evolve(ts_input=ts_spiking_in, verbose=(self.verbose > 1)); self.net_full.reset_all()
-                test_sim_mismatch = self.net_mismatch.evolve(ts_input=ts_spiking_in, verbose=(self.verbose > 1)); self.net_mismatch.reset_all()
 
                 # - Get the output
-                out_test_full = test_sim_full["output_layer_0"].samples
-                out_test_mismatch = test_sim_mismatch["output_layer_0"].samples
-
-                if(self.verbose > 1):
-                    self.net_full.lyrRes.ts_target = None
-                    self.net_mismatch.lyrRes.ts_target = None
+                out_test = batched_output[idx]
+                out_test_mismatch = batched_output_mismatch[idx]
 
                 # - Compute the final output
-                final_out_full = out_test_full @ self.w_out
+                final_out = out_test @ self.w_out
                 final_out_mismatch = out_test_mismatch @ self.w_out
                 
                 # - ..and filter
-                final_out_full = filter_1d(final_out_full, alpha=0.95)
+                final_out = filter_1d(final_out, alpha=0.95)
                 final_out_mismatch = filter_1d(final_out_mismatch, alpha=0.95)
 
                 # - Compute MSE
-                error_original = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test_full, axis=0))
+                error_original = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test, axis=0))
                 error_mismatch = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test_mismatch, axis=0))
 
                 sum_error_original += error_original
@@ -216,45 +225,44 @@ class HeySnipsNetworkADS(BaseModel):
                 if(self.verbose > 0):
                     target = tgt_signals[idx]
                     plt.clf()
-                    plt.plot(time_base, final_out_full, label="Spiking full")
-                    plt.plot(time_base, final_out_mismatch, label="Spiking mismatch")
-                    plt.plot(time_base, target, label="Target")
-                    plt.plot(time_base, batched_rate_output[idx], label="Rate")
+                    plt.plot(self.time_base, final_out, label="Spiking")
+                    plt.plot(self.time_base, final_out_mismatch, label="Spiking mismatch")
+                    plt.plot(self.time_base, target, label="Target")
+                    plt.plot(self.time_base, batched_rate_output[idx], label="Rate")
                     plt.ylim([-0.5,1.0])
                     plt.legend()
                     plt.draw()
                     plt.pause(0.001)
 
-                predicted_label_full = self.get_prediction(final_out=final_out_full, net=self.net_full, boundary=self.bb_full, threshold_0=self.t0_full)
-                predicted_label_mismatch = self.get_prediction(final_out_mismatch, self.net_mismatch, self.bb_full, self.t0_full)
+                predicted_label = self.get_prediction(final_out=final_out)
+                predicted_label_mismatch = self.get_prediction(final_out_mismatch)
 
                 predicted_label_rate = 0
                 if((batched_rate_output[idx] > 0.7).any()):
                     predicted_label_rate = 1
 
-                if(predicted_label_full == target_labels[idx]):
-                    correct_full += 1
+                if(predicted_label == target_labels[idx]):
+                    correct += 1
                 if(predicted_label_mismatch == target_labels[idx]):
                     correct_mismatch += 1
                 if(predicted_label_rate == target_labels[idx]):
                     correct_rate += 1
                 counter += 1
 
-
                 print("--------------------------------", flush=True)
                 print("TESTING batch", batch_id, flush=True)
-                print("true label", target_labels[idx], "Original", predicted_label_full, "Mismatch", predicted_label_mismatch, "Rate label", predicted_label_rate, flush=True)
+                print("Mimsatch std:", self.mismatch_std, "true label", target_labels[idx], "Original", predicted_label, "Mismatch", predicted_label_mismatch, "Rate label", predicted_label_rate, flush=True)
                 print("--------------------------------", flush=True)
 
             # - End batch for loop
         # - End testing loop
 
-        test_acc_full = correct_full / counter
+        test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
         test_acc_rate = correct_rate / counter
-        print("Test accuracy: Full: %.4f Mismatch: %.4f  Rate: %.4f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (test_acc_full, test_acc_mismatch, test_acc_rate, sum_error_original / counter, sum_error_mismatch / counter), flush=True)
+        print("Test accuracy: Full: %.4f Mismatch: %.4f  Rate: %.4f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (test_acc, test_acc_mismatch, test_acc_rate, sum_error_original / counter, sum_error_mismatch / counter), flush=True)
 
-        self.test_acc_original = test_acc_full
+        self.test_acc_original = test_acc
         self.test_acc_mismatch = test_acc_mismatch
         self.mean_mse_original = sum_error_original / counter
         self.mean_mse_mismatch = sum_error_mismatch / counter
@@ -267,22 +275,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
-    parser.add_argument('--use-fast', default=False, action="store_true", help="Use network trained with fast connections")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     num_trials = args['num_trials']
-    use_fast = args['use_fast']
     network_idx = args['network_idx']
 
-    prefix = "_"
-    if(use_fast):
-        prefix = "_fast_"
-    ads_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies.npy'
-    ads_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}test_accuracies_mismatch.npy'
-    ads_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse.npy'
-    ads_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads{prefix}mse_mismatch.npy'
+    ads_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_test_accuracies.npy'
+    ads_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_test_accuracies_mismatch.npy'
+    ads_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_mse.npy'
+    ads_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_mse_mismatch.npy'
 
 
     if(os.path.exists(ads_orig_final_path) and os.path.exists(ads_mismatch_final_path) and os.path.exists(ads_mse_final_path) and os.path.exists(ads_mse_mismatch_final_path)):
@@ -296,7 +299,7 @@ if __name__ == "__main__":
     final_array_mse_original = np.zeros((len(mismatch_stds), num_trials))
     final_array_mse_mismatch = np.zeros((len(mismatch_stds), num_trials))
 
-    batch_size = 1
+    batch_size = 50
     balance_ratio = 1.0
     snr = 10.
 
@@ -324,7 +327,7 @@ if __name__ == "__main__":
             num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
             model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
-                                        mismatch_std=mismatch_std, use_fast = use_fast, verbose=verbose, network_idx=network_idx)
+                                        mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,

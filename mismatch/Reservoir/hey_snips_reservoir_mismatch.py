@@ -39,6 +39,7 @@ class LSM(BaseModel):
         self.threshold_sums = 10
         self.acc_original = 0.0
         self.acc_mismatch = 0.0
+        self.mismatch_std = mismatch_std
 
         # - Create network
         network_path = os.path.join(os.getcwd(), f"../Resources/reservoir{network_idx}.json")
@@ -64,23 +65,23 @@ class LSM(BaseModel):
             self.lyr_filt_mismatch, self.lyr_inp_mismatch, self.lyr_res_mismatch, self.lyr_out_mismatch = layers_mismatch
 
         for i, tau in enumerate(self.lyr_res.tau_mem):
-            self.lyr_res_mismatch.tau_mem[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1))
+            self.lyr_res_mismatch.tau_mem[i] = np.abs(np.random.normal(tau, self.mismatch_std * tau, 1))
             if(self.lyr_res_mismatch.tau_mem[i] == 0):
                 self.lyr_res_mismatch.tau_mem[i] += 0.001
 
         for i, tau in enumerate(self.lyr_res.tau_syn_exc):
-            self.lyr_res_mismatch.tau_syn_exc[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1))
+            self.lyr_res_mismatch.tau_syn_exc[i] = np.abs(np.random.normal(tau, self.mismatch_std * tau, 1))
             if(self.lyr_res_mismatch.tau_syn_exc[i] == 0):
                 self.lyr_res_mismatch.tau_syn_exc[i] += 0.001
 
         for i, tau in enumerate(self.lyr_res.tau_syn_inh):
-            self.lyr_res_mismatch.tau_syn_inh[i] = np.abs(np.random.normal(tau, mismatch_std * tau, 1)) 
+            self.lyr_res_mismatch.tau_syn_inh[i] = np.abs(np.random.normal(tau, self.mismatch_std * tau, 1)) 
             if(self.lyr_res_mismatch.tau_syn_inh[i] == 0):
                 self.lyr_res_mismatch.tau_syn_inh[i] += 0.001
 
         for i, th in enumerate(self.lyr_res.v_thresh):
             # - Compute fair std for the difference between v_thresh and v_reset
-            v_thresh_std = mismatch_std*abs((th - self.lyr_res.v_reset[i])/th)
+            v_thresh_std = self.mismatch_std*abs((th - self.lyr_res.v_reset[i])/th)
             new_th = np.random.normal(th, abs(v_thresh_std * th), 1)
             if(self.lyr_res_mismatch.v_reset[i] < new_th):
                 self.lyr_res_mismatch.v_thresh[i] = new_th
@@ -176,7 +177,7 @@ class LSM(BaseModel):
             batch = copy.deepcopy(list(batch))
             true_labels, pred_labels, predicted_labels_mismatch = self.predict(batch, dataset='test')
 
-            print("Target", true_labels, "Predicted", pred_labels, "Predicted Mismatch:", predicted_labels_mismatch)
+            print("Mismatch std:", self.mismatch_std, "Target", true_labels, "Predicted", pred_labels, "Predicted Mismatch:", predicted_labels_mismatch)
 
             if(true_labels[0] == pred_labels[0]):
                 correct_original += 1
@@ -185,6 +186,8 @@ class LSM(BaseModel):
 
         acc_original = correct_original / counter
         acc_mismatch = correct_mismatch / counter
+
+        print("Mismatch std:", self.mismatch_std, "Orig. Acc:", acc_original, "Mismatch acc.:", acc_mismatch)
 
         self.acc_original = acc_original
         self.acc_mismatch = acc_mismatch

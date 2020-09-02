@@ -16,52 +16,58 @@ os.chdir(directory_name)
 
 
 #### General format: Time x Features (e.g. 5000 x 128)
+use_jax = True
+prefix = ""
+if(use_jax):
+    prefix = "jax_"
 
-with open('Resources/Plotting/final_out_0.npy', 'rb') as f:
-        final_out_0 = np.load(f)
-with open('Resources/Plotting/final_out_1.npy', 'rb') as f:
+
+with open(f'Resources/Plotting/{prefix}final_out_0.npy', 'rb') as f:
+    final_out_0 = np.load(f)
+with open(f'Resources/Plotting/{prefix}final_out_1.npy', 'rb') as f:
     final_out_1 = np.load(f)
-with open('Resources/Plotting/final_out_2.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}final_out_2.npy', 'rb') as f:
     final_out_2 = np.load(f)
-with open('Resources/Plotting/final_out_3.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}final_out_3.npy', 'rb') as f:
     final_out_3 = np.load(f)
 
-with open('Resources/Plotting/input_0.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}input_0.npy', 'rb') as f:
     input_0 = np.load(f)
-with open('Resources/Plotting/input_1.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}input_1.npy', 'rb') as f:
     input_1 = np.load(f)
-with open('Resources/Plotting/input_2.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}input_2.npy', 'rb') as f:
     input_2 = np.load(f)
-with open('Resources/Plotting/input_3.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}input_3.npy', 'rb') as f:
     input_3 = np.load(f)
 
-with open('Resources/Plotting/target_0.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}target_0.npy', 'rb') as f:
     target_0 = np.load(f)
-with open('Resources/Plotting/target_1.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}target_1.npy', 'rb') as f:
     target_1 = np.load(f)
-with open('Resources/Plotting/target_2.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}target_2.npy', 'rb') as f:
     target_2 = np.load(f)
-with open('Resources/Plotting/target_3.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}target_3.npy', 'rb') as f:
     target_3 = np.load(f)
 
-with open('Resources/Plotting/rate_0.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}rate_0.npy', 'rb') as f:
     rate_0 = np.load(f).ravel()
-with open('Resources/Plotting/rate_1.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}rate_1.npy', 'rb') as f:
     rate_1 = np.load(f).ravel()
-with open('Resources/Plotting/rate_2.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}rate_2.npy', 'rb') as f:
     rate_2 = np.load(f).ravel()
-with open('Resources/Plotting/rate_3.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}rate_3.npy', 'rb') as f:
     rate_3 = np.load(f).ravel()
 
-with open('Resources/Plotting/spike_channels.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}spike_channels.npy', 'rb') as f:
     spike_channels = np.load(f)
-with open('Resources/Plotting/spike_times.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}spike_times.npy', 'rb') as f:
     spike_times = np.load(f)
 
-with open('Resources/Plotting/reconstructed_dynamics.npy', 'rb') as f:
+with open(f'Resources/Plotting/{prefix}reconstructed_dynamics.npy', 'rb') as f:
     reconstructed_dynamics = np.load(f)
-    reconstructed_dynamics = reconstructed_dynamics.T
-with open('Resources/Plotting/target_dynamics.npy', 'rb') as f:
+    if(not use_jax):
+        reconstructed_dynamics = reconstructed_dynamics.T
+with open(f'Resources/Plotting/{prefix}target_dynamics.npy', 'rb') as f:
     target_dynamics = np.load(f)
 plot_num_dyn = 6
 stagger_dyn = np.ones((target_dynamics.shape[0],plot_num_dyn))
@@ -156,5 +162,5 @@ ax2.plot([0.0,0.2], [-1,-1], color="k", linewidth=0.5)
 ax2.text(x=0.01, y=-1.5, s="200 ms")
 ax2.text(x=0.01, y=10.5, s="A", fontsize=16, fontstyle="oblique")
 
-plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure1.png", dpi=1200)
+plt.savefig(f"/home/julian/Documents/RobustClassificationWithEBNs/Figures/{prefix}figure1.png", dpi=1200)
 plt.show()

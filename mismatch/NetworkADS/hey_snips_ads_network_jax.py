@@ -97,9 +97,9 @@ class HeySnipsNetworkADS(BaseModel):
         if(os.path.exists(self.model_path_ads_net)):
             print("Loaded pretrained network from %s" % self.model_path_ads_net)
             sys.exit(0)
-            # self.ads_layer = self.load(self.model_path_ads_net)
-            # self.tau_mem = self.ads_layer.tau_mem[0]
-            # self.Nc = self.ads_layer.weights_in.shape[0]
+            self.ads_layer = self.load(self.model_path_ads_net)
+            self.tau_mem = self.ads_layer.tau_mem[0]
+            self.Nc = self.ads_layer.weights_in.shape[0]
         else:
             self.Nc = self.num_rate_neurons
             self.num_neurons = num_neurons
@@ -431,7 +431,11 @@ class HeySnipsNetworkADS(BaseModel):
 
     def test(self, data_loader, fn_metrics):
 
+        correct = 0
+        correct_rate = 0
+        counter = 0
         integral_pairs = []
+
         # - Load the best model
         self.ads_layer = self.load(self.model_path_ads_net)
 
@@ -523,7 +527,7 @@ if __name__ == "__main__":
     parser.add_argument('--tau-out', default=0.07, type=float, help="Synaptic time constant of output synapses")
     parser.add_argument('--epochs', default=5, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
-    parser.add_argument('--eta', default=0.0001, type=float, help="Learning rate")
+    parser.add_argument('--eta', default=0.00001, type=float, help="Learning rate")
     parser.add_argument('--num-val', default=500, type=int, help="Number of validation samples")
     parser.add_argument('--num-test', default=1000, type=int, help="Number of test samples")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")

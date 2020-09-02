@@ -22,6 +22,7 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 import argparse
 from Utils import filter_1d, k_step_function
+from copy import copy
 
 
 # - Change current directory to directory where this file is located
@@ -45,6 +46,8 @@ class HeySnipsNetworkADS(BaseModel):
                  verbose=0,
                  network_idx ="",
                  seed=42,
+                 use_batching=False,
+                 use_ebn=False,
                  name="Snips ADS Jax",
                  version="1.0"):
         
@@ -60,13 +63,17 @@ class HeySnipsNetworkADS(BaseModel):
         self.num_epochs = num_epochs
         self.threshold = threshold
         self.threshold0 = 0.5
-        self.best_boundary = 200 # - This value is optimized in validation 
+        self.best_boundary = 200 # - This value is optimized in validation
+        self.eta = eta
 
         self.num_rate_neurons = 128 
         self.num_targets = len(labels)
         self.time_base = onp.arange(0,5.0,self.dt)
+        self.use_batching = use_batching
+        self.use_ebn = use_ebn
 
         self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -92,7 +99,13 @@ class HeySnipsNetworkADS(BaseModel):
 
         onp.random.seed(seed)
         # - Create NetworkADS
-        self.model_path_ads_net = os.path.join(self.base_path, f"Resources/jax_ads{network_idx}.json")
+        postfix = ""
+        if(self.use_batching):
+            postfix += "_batched"
+        if(self.use_ebn):
+            postfix += "_ebn"
+
+        self.model_path_ads_net = os.path.join(self.base_path, f"Resources/jax_ads{network_idx}{postfix}.json")
 
         if(os.path.exists(self.model_path_ads_net)):
             print("Loaded pretrained network from %s" % self.model_path_ads_net)
@@ -114,7 +127,6 @@ class HeySnipsNetworkADS(BaseModel):
             mu = 0.0005
             nu = 0.0001
             D = onp.random.randn(self.Nc,self.num_neurons) / self.Nc
-            eta = eta
             k = 10 / self.tau_mem
             v_thresh = (nu * lambda_d + mu * lambda_d**2 + onp.sum(abs(D.T), -1, keepdims = True)**2) / 2
             v_thresh_target = 1.0*onp.ones((self.num_neurons,)) # - V_thresh
@@ -127,11 +139,17 @@ class HeySnipsNetworkADS(BaseModel):
             v_reset_target = b - a
             noise_std_realistic = 0.00
 
+            weights_fast_realistic = onp.zeros((self.num_neurons,self.num_neurons))
+            if(self.use_ebn):
+                weights_fast = (D.T@D + mu*lambda_d**2*onp.eye(self.num_neurons))
+                onp.fill_diagonal(weights_fast, 0)
+                weights_fast_realistic = -a*3*onp.divide(weights_fast.T, v_thresh.ravel()).T
+
             self.ads_layer = JaxADS(weights_in = weights_in_realistic * self.tau_mem,
-                                    weights_out = 0.5*weights_out_realistic,
-                                    weights_fast = onp.zeros((self.num_neurons,self.num_neurons)),
+                                    weights_out = weights_out_realistic * self.tau_mem,
+                                    weights_fast = weights_fast_realistic,
                                     weights_slow = onp.zeros((self.num_neurons,self.num_neurons)),
-                                    eta = eta,
+                                    eta = self.eta,
                                     k = k,
                                     noise_std = noise_std_realistic,
                                     dt = self.dt,
@@ -194,6 +212,38 @@ class HeySnipsNetworkADS(BaseModel):
 
         return (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output)
 
+    def check_balance(self, batched_spiking_in):
+        spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
+        batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
+        w_fast = copy(self.ads_layer.weights_fast)
+        self.ads_layer.weights_fast *= 0
+        spikes_ts_no_fast, _, states_t_no_fast = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
+        batched_output_no_fast = onp.squeeze(onp.array(states_t_no_fast["output_ts"]), axis=-1)
+        self.ads_layer.weights_fast = w_fast
+        d_fast = batched_output[0]
+        d_no_fast = batched_output_no_fast[0]
+        error_fast = onp.mean(onp.linalg.norm(d_fast-0.0005*batched_spiking_in[0],axis=0))
+        error_no_fast = onp.mean(onp.linalg.norm(d_no_fast-0.0005*batched_spiking_in[0],axis=0))
+        if(self.verbose > 0):
+            plt.subplot(411)
+            plt.title("With EBN")
+            for i in range(8):
+                plt.plot(i*0.5+d_fast[:,i], color=f"C{str(i)}")
+                plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
+            plt.subplot(412)
+            plt.scatter(onp.nonzero(spikes_ts[0])[0]*self.dt, onp.nonzero(spikes_ts[0])[1], color="k", linewidths=0.0)
+            plt.xlim([0,5.0])
+            plt.subplot(413)
+            plt.title("No EBN")
+            for i in range(8):
+                plt.plot(i*0.5+d_no_fast[:,i], color=f"C{str(i)}")
+                plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
+            plt.subplot(414)
+            plt.scatter(onp.nonzero(spikes_ts_no_fast[0])[0]*self.dt, onp.nonzero(spikes_ts_no_fast[0])[1], color="k", linewidths=0.0)
+            plt.xlim([0,5.0])
+            plt.show()
+        print(f"Error EBN: {error_fast} No EBN: {error_no_fast}")
+
     def train(self, data_loader, fn_metrics):
 
         was_first = False
@@ -243,12 +293,16 @@ class HeySnipsNetworkADS(BaseModel):
                 (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
                 predicted_labels_batch = []
                 target_labels_batch = []
+
+                if(self.use_ebn and epoch == 0 and batch_id == 0):
+                    self.check_balance(batched_spiking_in)
                 
                 batched_output = self.ads_layer.train_output_target(ts_input=batched_spiking_in,
                                                                         ts_target=batched_rate_net_dynamics,
-                                                                        eta=0.00001,
+                                                                        eta=self.eta,
                                                                         k=f_k(num_signal_iterations),
-                                                                        num_timesteps=filtered.shape[1])
+                                                                        num_timesteps=filtered.shape[1],
+                                                                        use_batching=self.use_batching)
 
 
                 for idx in range(batched_output.shape[0]):
@@ -535,6 +589,8 @@ if __name__ == "__main__":
     # parser.add_argument('--discretize-dynapse', default=False, action='store_true', help="Respect constraint of DYNAP-SE of having only 64 synapses per neuron. --discretize must not be -1.")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     parser.add_argument('--seed', default=42, type=int, help="Random seed")
+    parser.add_argument('--use-batching', default=False, action='store_true', help="Use batching")
+    parser.add_argument('--use-ebn', default=False, action='store_true', help="Use EBN connections")
 
     args = vars(parser.parse_args())
     num = args['num']
@@ -551,6 +607,8 @@ if __name__ == "__main__":
     # discretize = args['discretize']
     network_idx = args['network_idx']
     seed = args['seed']
+    use_batching = args['use_batching']
+    use_ebn = args['use_ebn']
 
     batch_size = 1
     balance_ratio = 1.0
@@ -580,7 +638,9 @@ if __name__ == "__main__":
                                 eta=eta,
                                 verbose=verbose,
                                 network_idx = network_idx,
-                                seed=seed)
+                                seed=seed,
+                                use_batching=use_batching,
+                                use_ebn=use_ebn)
 
     experiment.set_model(model)
     experiment.set_config({'num_train_batches': num_train_batches,

@@ -8,6 +8,7 @@ matplotlib.rc('text')
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
+matplotlib.rcParams['figure.figsize'] = [15, 10]
 import matplotlib.pyplot as plt
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
@@ -67,6 +68,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.mean_mse_mismatch = 0.0
 
         self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -216,12 +218,16 @@ class HeySnipsNetworkADS(BaseModel):
                 if(self.verbose > 0):
                     target = tgt_signals[idx]
                     plt.clf()
+                    plt.subplot(211)
                     plt.plot(time_base, final_out_full, label="Spiking full")
                     plt.plot(time_base, final_out_mismatch, label="Spiking mismatch")
                     plt.plot(time_base, target, label="Target")
                     plt.plot(time_base, batched_rate_output[idx], label="Rate")
                     plt.ylim([-0.5,1.0])
                     plt.legend()
+                    plt.subplot(212)
+                    test_sim_full["lyrRes"].plot(color="k", linewidths=0.0)
+                    plt.xlim([0.0,5.0])
                     plt.draw()
                     plt.pause(0.001)
 

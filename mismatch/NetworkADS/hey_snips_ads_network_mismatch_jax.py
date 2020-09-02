@@ -8,6 +8,7 @@ matplotlib.rc('text')
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
+matplotlib.rcParams['figure.figsize'] = [15, 10]
 import matplotlib.pyplot as plt
 from jax import vmap
 from SIMMBA import BaseModel
@@ -193,7 +194,7 @@ class HeySnipsNetworkADS(BaseModel):
             tgt_signals = np.stack([s[2] for s in batch])
             (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
 
-            _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
+            spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
             batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
 
             _, _, states_t_mismatch = vmap(self.ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_mismatch._pack(), False, batched_spiking_in)
@@ -225,12 +226,19 @@ class HeySnipsNetworkADS(BaseModel):
                 if(self.verbose > 0):
                     target = tgt_signals[idx]
                     plt.clf()
+                    plt.subplot(211)
                     plt.plot(self.time_base, final_out, label="Spiking")
                     plt.plot(self.time_base, final_out_mismatch, label="Spiking mismatch")
                     plt.plot(self.time_base, target, label="Target")
                     plt.plot(self.time_base, batched_rate_output[idx], label="Rate")
                     plt.ylim([-0.5,1.0])
                     plt.legend()
+                    plt.subplot(212)
+                    spikes_ind = np.nonzero(spikes_ts[idx])
+                    times = spikes_ind[0]
+                    channels = spikes_ind[1]
+                    plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
+                    plt.xlim([0.0,5.0])
                     plt.draw()
                     plt.pause(0.001)
 

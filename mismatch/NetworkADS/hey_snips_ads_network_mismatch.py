@@ -67,8 +67,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.mean_mse_original = 0.0
         self.mean_mse_mismatch = 0.0
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
-        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -317,7 +317,7 @@ if __name__ == "__main__":
         for _ in range(num_trials):
 
             experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                    percentage=1.0,
+                                    percentage=0.1,
                                     snr=snr,
                                     randomize_after_epoch=True,
                                     downsample=1000,

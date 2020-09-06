@@ -56,6 +56,9 @@ class HeySnipsNetworkADS(BaseModel):
         self.verbose = verbose
         self.fs = fs
         self.dt = 0.001
+        # if(use_ebn):
+        #     self.dt = 0.0001
+        
 
         self.num_val = num_val
         self.num_test = num_test
@@ -72,8 +75,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.use_batching = use_batching
         self.use_ebn = use_ebn
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
-        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -120,7 +123,7 @@ class HeySnipsNetworkADS(BaseModel):
             print("Building network with N: %d Nc: %d" % (self.num_neurons,self.Nc))
 
             lambda_d = 20
-            self.tau_mem = 0.05
+            self.tau_mem = 1 / lambda_d
             self.tau_slow = tau_slow
             self.tau_out = tau_out
             tau_syn_fast = 0.001
@@ -143,7 +146,7 @@ class HeySnipsNetworkADS(BaseModel):
             if(self.use_ebn):
                 weights_fast = (D.T@D + mu*lambda_d**2*onp.eye(self.num_neurons))
                 onp.fill_diagonal(weights_fast, 0)
-                weights_fast_realistic = -a*3*onp.divide(weights_fast.T, v_thresh.ravel()).T
+                weights_fast_realistic = -1.5*onp.divide(weights_fast.T, v_thresh.ravel()).T
 
             self.ads_layer = JaxADS(weights_in = weights_in_realistic * self.tau_mem,
                                     weights_out = weights_out_realistic * self.tau_mem,
@@ -215,33 +218,42 @@ class HeySnipsNetworkADS(BaseModel):
     def check_balance(self, batched_spiking_in):
         spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
         batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
+        batched_vmem = onp.squeeze(onp.array(states_t["Vmem"]), axis=-1)
         w_fast = copy(self.ads_layer.weights_fast)
         self.ads_layer.weights_fast *= 0
         spikes_ts_no_fast, _, states_t_no_fast = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
         batched_output_no_fast = onp.squeeze(onp.array(states_t_no_fast["output_ts"]), axis=-1)
+        batched_vmem_no_fast = onp.squeeze(onp.array(states_t_no_fast["Vmem"]), axis=-1)
         self.ads_layer.weights_fast = w_fast
         d_fast = batched_output[0]
         d_no_fast = batched_output_no_fast[0]
         error_fast = onp.mean(onp.linalg.norm(d_fast-0.0005*batched_spiking_in[0],axis=0))
         error_no_fast = onp.mean(onp.linalg.norm(d_no_fast-0.0005*batched_spiking_in[0],axis=0))
         if(self.verbose > 0):
-            plt.subplot(411)
+            plt.subplot(611)
             plt.title("With EBN")
             for i in range(8):
                 plt.plot(i*0.5+d_fast[:,i], color=f"C{str(i)}")
                 plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
-            plt.subplot(412)
+            plt.subplot(612)
             plt.scatter(onp.nonzero(spikes_ts[0])[0]*self.dt, onp.nonzero(spikes_ts[0])[1], color="k", linewidths=0.0)
             plt.xlim([0,5.0])
-            plt.subplot(413)
+            plt.subplot(613)
             plt.title("No EBN")
             for i in range(8):
                 plt.plot(i*0.5+d_no_fast[:,i], color=f"C{str(i)}")
                 plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
-            plt.subplot(414)
+            plt.subplot(614)
             plt.scatter(onp.nonzero(spikes_ts_no_fast[0])[0]*self.dt, onp.nonzero(spikes_ts_no_fast[0])[1], color="k", linewidths=0.0)
             plt.xlim([0,5.0])
+            plt.subplot(615)
+            for i in range(10):
+                plt.plot(i*1+batched_vmem[0,:,i], color=f"C{str(i)}")
+            plt.subplot(616)
+            for i in range(10):
+                plt.plot(i*1+batched_vmem_no_fast[0,:,i], color=f"C{str(i)}")
             plt.show()
+
         print(f"Error EBN: {error_fast} No EBN: {error_no_fast}")
 
     def train(self, data_loader, fn_metrics):
@@ -614,11 +626,15 @@ if __name__ == "__main__":
     balance_ratio = 1.0
     snr = 10.
 
+    downsample = 1000
+    # if(use_ebn):
+    #     downsample = 10000
+
     experiment = HeySnipsDEMAND(batch_size=batch_size,
                             percentage=percentage_data,
                             snr=snr,
                             randomize_after_epoch=True,
-                            downsample=1000,
+                            downsample=downsample,
                             is_tracking=False,
                             one_hot=False,
                             cache_folder=None)

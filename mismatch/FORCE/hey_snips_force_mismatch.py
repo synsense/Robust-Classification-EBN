@@ -82,7 +82,8 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         self.mismatch_std = mismatch_std
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/"
+        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch/"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -254,10 +255,10 @@ if __name__ == "__main__":
     num_trials = args['num_trials']
     network_idx = args['network_idx']
 
-    force_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies.npy'
-    force_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies_mismatch.npy'
-    force_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse.npy'
-    force_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse_mismatch.npy'
+    force_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies.npy'
+    force_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_test_accuracies_mismatch.npy'
+    force_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse.npy'
+    force_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}force_mse_mismatch.npy'
 
     if(os.path.exists(force_orig_final_path) and os.path.exists(force_mismatch_final_path) and os.path.exists(force_mse_final_path) and os.path.exists(force_mse_mismatch_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
@@ -270,7 +271,7 @@ if __name__ == "__main__":
     final_array_mse_original = onp.zeros((len(mismatch_stds), num_trials))
     final_array_mse_mismatch = onp.zeros((len(mismatch_stds), num_trials))
 
-    batch_size = 10
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
@@ -285,7 +286,7 @@ if __name__ == "__main__":
         for _ in range(num_trials):
 
             experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                    percentage=1.0,
+                                    percentage=0.1,
                                     snr=snr,
                                     randomize_after_epoch=True,
                                     downsample=1000,

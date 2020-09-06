@@ -16,7 +16,7 @@ from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from rockpool.timeseries import TSContinuous
 from rockpool import layers, Network
-from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, FFExpSynJax, RecLIFCurrentInJax_IO, FFLIFCurrentInJax_SO, FFExpSynCurrentInJax, RecLIFCurrentInJax_SO
+from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, FFExpSynJax, RecLIFCurrentInJax_IO, FFLIFCurrentInJax_SO, FFExpSynCurrentInJax, RecLIFCurrentInJax_SO, RecLIFCurrentInJax
 from rockpool.networks import JaxStack
 import os
 import sys
@@ -37,7 +37,10 @@ def apply_mismatch(net, std_p=0.2):
         for i,v in enumerate(d):
             d[i] = onp.random.normal(loc=v, scale=std_p*abs(v))
         return d
-    bias = _m(bias)
+    
+    for i,v in enumerate(bias):
+        bias[i] = onp.random.normal(loc=v, scale=std_p)
+    
     tau_syn = onp.abs(_m(tau_syn))
     tau_mem = onp.abs(_m(tau_mem))
 
@@ -52,8 +55,26 @@ def apply_mismatch(net, std_p=0.2):
         name = 'LIF_Reservoir',
     )
 
+    # lyrLIFRecurrent_mismatch = RecLIFCurrentInJax(
+    #     w_recurrent = copy(net.LIF_Reservoir.weights),
+    #     tau_mem = tau_mem,
+    #     tau_syn = tau_syn,
+    #     bias = bias,
+    #     noise_std = 0.0,
+    #     dt = net.dt,
+    #     name = 'LIF_Reservoir',
+    # )
+
+    # lyrOutput_mismatch = FFExpSynJax(
+    #     weights = 2.5*net.LIF_Readout.weights,
+    #     dt = net.dt,
+    #     noise_std = 0.0,
+    #     tau = 0.1,
+    # )
+
     # - Create JaxStack
     net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, deepcopy(net.LIF_Readout)])
+    # net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, lyrOutput_mismatch])
     return net_mismatch
 
 class HeySnipsNetworkADS(BaseModel):
@@ -78,7 +99,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.test_accuracy_mismatch = 0.5
         self.mismatch_std = mismatch_std
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -147,6 +169,7 @@ class HeySnipsNetworkADS(BaseModel):
         correct_mismatch = 0
         correct_rate = 0
         counter = 0
+        deviation = []
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
@@ -173,7 +196,6 @@ class HeySnipsNetworkADS(BaseModel):
 
                 predicted_label = 0
                 if(onp.max(integral_final_out) > self.best_boundary):
-                # if((batched_spiking_output[idx] > self.threshold).any()):
                     predicted_label = 1
 
                 if(predicted_label == target_labels[idx]):
@@ -187,8 +209,7 @@ class HeySnipsNetworkADS(BaseModel):
                         integral_final_out_mismatch[t] = val + integral_final_out_mismatch[t-1]
 
                 predicted_label_mismatch = 0
-                # if(onp.max(integral_final_out_mismatch) > self.best_boundary):
-                if((batched_spiking_output_mismatch[idx] > self.threshold).any()):
+                if(onp.max(integral_final_out_mismatch) > self.best_boundary):
                     predicted_label_mismatch = 1
 
                 if(predicted_label_mismatch == target_labels[idx]):
@@ -202,16 +223,40 @@ class HeySnipsNetworkADS(BaseModel):
                 if(predicted_rate_label == target_labels[idx]):
                     correct_rate += 1
 
+                error_deviation = onp.var(batched_spiking_output[idx]-batched_spiking_output_mismatch[idx]) / onp.var(batched_spiking_output[idx])
+                deviation.append(error_deviation)
+
+                if(self.verbose > 0):
+                    plt.clf()
+                    # plt.subplot(311)
+                    plt.plot(self.time_base, batched_spiking_output[idx], label="spiking")
+                    plt.plot(self.time_base, batched_spiking_output_mismatch[idx], label="mismatch")
+                    plt.plot(self.time_base, batched_rate_output[idx], label="rate")
+                    plt.ylim([-0.05,1.0])
+                    plt.legend()
+                    # plt.subplot(312)
+                    # spikes_rec_ind = onp.nonzero(states_ts_mismatch[1]["out"][idx])
+                    # plt.scatter(0.001*spikes_rec_ind[0], spikes_rec_ind[1], color="k", linewidths=0.0)
+                    # plt.ylim([0,768])
+                    # plt.xlim([0,5.0])
+                    # plt.subplot(313)
+                    # spikes_rec_ind = onp.nonzero(states_ts[1]["out"][idx])
+                    # plt.scatter(0.001*spikes_rec_ind[0], spikes_rec_ind[1], color="k", linewidths=0.0)
+                    # plt.ylim([0,768])
+                    # plt.xlim([0,5.0])
+                    plt.draw()
+                    plt.pause(0.001)
+
                 print("--------------------", flush=True)
                 print("Batch", batch_id, "Idx", idx , flush=True)
-                print("Mismatch std:", self.mismatch_std, "TESTING: True:", target_labels[idx], "Predicted:", predicted_label, "Predicted MISMATCH", predicted_label_mismatch, "Rate:", predicted_rate_label, flush=True)
+                print("Error:", error_deviation ,"Mismatch std:", self.mismatch_std, "TESTING: True:", target_labels[idx], "Predicted:", predicted_label, "Predicted MISMATCH", predicted_label_mismatch, "Rate:", predicted_rate_label, flush=True)
                 print("--------------------", flush=True)
 
         # - End for batch
         test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
         rate_acc = correct_rate / counter
-        print("Test accuracy is %.3f | Test accuracy MISMATCH is %.3f | Rate accuracy is %.3f" % (test_acc, test_acc_mismatch, rate_acc), flush=True)
+        print("Deviation error: %.3f Test accuracy is %.3f | Test accuracy MISMATCH is %.3f | Rate accuracy is %.3f" % (onp.mean(deviation), test_acc, test_acc_mismatch, rate_acc), flush=True)
 
         # - Save for this model
         self.test_accuracy = test_acc
@@ -223,7 +268,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--percentage-data', default=1.0, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
+    parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     
@@ -233,18 +278,18 @@ if __name__ == "__main__":
     num_trials = args['num_trials']
     network_idx = args['network_idx']
 
-    bptt_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies.npy'
-    bptt_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies_mismatch.npy'
+    bptt_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies.npy'
+    bptt_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies_mismatch.npy'
 
     if(os.path.exists(bptt_orig_final_path) and os.path.exists(bptt_mismatch_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
+        # sys.exit(0)
 
-    batch_size = 10
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
-    mismatch_stds = [0.05, 0.2, 0.3]
+    mismatch_stds = [0.2, 0.2, 0.3]
     final_array_original = onp.zeros((len(mismatch_stds), num_trials))
     final_array_mismatch = onp.zeros((len(mismatch_stds), num_trials))
 

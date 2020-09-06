@@ -32,7 +32,7 @@ directory_name = os.path.dirname(absolute_path)
 os.chdir(directory_name)
 
 
-def apply_mismatch(ads_layer, mismatch_std=0.2):
+def apply_mismatch(ads_layer, mismatch_std=0.2, beta=0.0):
     N = ads_layer.weights_slow.shape[0]
     new_tau_slow = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_syn_r_slow) + np.mean(ads_layer.tau_syn_r_slow))
     new_tau_mem = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_mem) + np.mean(ads_layer.tau_mem))
@@ -55,7 +55,9 @@ def apply_mismatch(ads_layer, mismatch_std=0.2):
                                     tau_syn_r_fast = ads_layer.tau_syn_r_fast,
                                     tau_syn_r_slow = new_tau_slow,
                                     tau_syn_r_out = ads_layer.tau_syn_r_out,
-                                    t_ref = ads_layer.t_ref)
+                                    t_ref = ads_layer.t_ref,
+                                    beta=beta,
+                                    rho=0.99)
 
     return mismatch_ads_layer
 
@@ -66,6 +68,8 @@ class HeySnipsNetworkADS(BaseModel):
                  fs=16000.,
                  verbose=0,
                  network_idx="",
+                 use_batching=False,
+                 use_ebn=False,
                  name="Snips ADS",
                  version="1.0"):
         
@@ -81,9 +85,15 @@ class HeySnipsNetworkADS(BaseModel):
         self.test_acc_mismatch = 0.0
         self.mean_mse_original = 0.0
         self.mean_mse_mismatch = 0.0
+        self.average_power_error = 0.0
+        self.average_final_mse = 0.0
+        self.final_outs = []
+        self.targets = []
+        self.use_batching = use_batching
+        self.use_ebn = use_ebn
 
-        self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
-        # self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -107,8 +117,12 @@ class HeySnipsNetworkADS(BaseModel):
                                              noise_std=0.0,
                                              name="hidden")
 
-        # - Create NetworkADS
-        network_name = f"Resources/jax_ads{network_idx}.json"
+        postfix = ""
+        if(use_batching):
+            postfix += "_batched"
+        if(use_ebn):
+            postfix += "_ebn"
+        network_name = f"Resources/jax_ads{network_idx}{postfix}.json"
         self.model_path_ads_net = os.path.join(self.base_path, network_name)
 
         if(os.path.exists(self.model_path_ads_net)):
@@ -117,8 +131,35 @@ class HeySnipsNetworkADS(BaseModel):
             self.ads_layer = self.load(self.model_path_ads_net)
             self.tau_mem = self.ads_layer.tau_mem[0]
             self.Nc = self.ads_layer.weights_in.shape[0]
+            if(postfix == ""):
+                self.ads_layer.weights_out = self.ads_layer.weights_in.T
 
-            self.ads_layer_mismatch = apply_mismatch(self.ads_layer, mismatch_std=self.mismatch_std)
+            beta = 0.0
+            if(self.use_batching or (self.use_ebn and self.mismatch_std==0.3)):
+                beta = 0.01 # - Use adaptation for strong mismatch or the batched trained networks without EBNs
+            self.ads_layer_mismatch = apply_mismatch(self.ads_layer, mismatch_std=self.mismatch_std, beta=beta)
+            if(postfix == ""):
+                self.ads_layer_mismatch.weights_out = self.ads_layer_mismatch.weights_in.T
+
+            if(self.use_ebn):
+                # - Scale down matrices since optimal EBN structure is affected by change in tau_mem and v_thresh
+                if(self.mismatch_std == 0.05):
+                    reduction=0.9
+                    self.ads_layer_mismatch.weights_fast *= reduction
+                    self.ads_layer_mismatch.weights_slow *= reduction
+                elif(self.mismatch_std == 0.2):
+                    reduction=0.5
+                    # lambda_d = 1/self.ads_layer.tau_mem[0]
+                    # Ti = (0.0001*lambda_d+0.0005*lambda_d)/2
+                    # Ti_new = (0.0001*1/self.ads_layer_mismatch.tau_mem + 0.0001*(1/self.ads_layer_mismatch.tau_mem)**2)/2
+                    # self.ads_layer_mismatch.weights_fast = np.divide(self.ads_layer_mismatch.weights_fast, Ti_new/Ti)
+                    self.ads_layer_mismatch.weights_fast *= reduction
+                    self.ads_layer_mismatch.weights_slow *= reduction
+                elif(self.mismatch_std == 0.3):
+                    reduction = 0.2
+                    self.ads_layer_mismatch.weights_fast *= reduction
+                    self.ads_layer_mismatch.weights_slow *= reduction
+
             self.amplitude = 50 / self.tau_mem
 
         else:
@@ -182,11 +223,17 @@ class HeySnipsNetworkADS(BaseModel):
     def test(self, data_loader, fn_metrics):
 
         correct = correct_mismatch = correct_rate = counter = sum_error_original = sum_error_mismatch = 0
+        power = []
+        mse = []
+        final_outs = []
+        targets = []
 
         for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
 
             if (batch_id * data_loader.batch_size >= 100):
                 break
+
+            confusion_matrix = np.zeros((2,2))
 
             # - Get input
             filtered = np.stack([s[0][1] for s in batch])
@@ -197,7 +244,7 @@ class HeySnipsNetworkADS(BaseModel):
             spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
             batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
 
-            _, _, states_t_mismatch = vmap(self.ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_mismatch._pack(), False, batched_spiking_in)
+            spikes_ts_mismatch, _, states_t_mismatch = vmap(self.ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_mismatch._pack(), False, batched_spiking_in)
             batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1)
 
 
@@ -208,14 +255,21 @@ class HeySnipsNetworkADS(BaseModel):
                 out_test_mismatch = batched_output_mismatch[idx]
 
                 # - Compute the final output
-                final_out = out_test @ self.w_out
-                final_out_mismatch = out_test_mismatch @ self.w_out
+                final_out = 1.15 * out_test @ self.w_out
+                final_out_mismatch = out_test_mismatch @ self.w_out # - Gain to account for spike freq. adaptation or EBN
+                final_outs.append(final_out_mismatch)
+                targets.append(target_labels[idx])
                 
+                error_power = np.var(final_out-final_out_mismatch)/np.var(final_out)
+                error_mse = np.mean((final_out-final_out_mismatch)**2)
+                power.append(error_power)
+                mse.append(error_mse)
+
                 # - ..and filter
                 final_out = filter_1d(final_out, alpha=0.95)
-                final_out_mismatch = filter_1d(final_out_mismatch, alpha=0.95)
+                final_out_mismatch = filter_1d(1.15*final_out_mismatch, alpha=0.95)
 
-                # - Compute MSE
+                # - Compute MSE for dynamics
                 error_original = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test, axis=0))
                 error_mismatch = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test_mismatch, axis=0))
 
@@ -226,23 +280,30 @@ class HeySnipsNetworkADS(BaseModel):
                 if(self.verbose > 0):
                     target = tgt_signals[idx]
                     plt.clf()
-                    plt.subplot(211)
+                    plt.subplot(311)
                     plt.plot(self.time_base, final_out, label="Spiking")
                     plt.plot(self.time_base, final_out_mismatch, label="Spiking mismatch")
                     plt.plot(self.time_base, target, label="Target")
                     plt.plot(self.time_base, batched_rate_output[idx], label="Rate")
                     plt.ylim([-0.5,1.0])
                     plt.legend()
-                    plt.subplot(212)
+                    plt.subplot(312)
                     spikes_ind = np.nonzero(spikes_ts[idx])
+                    times = spikes_ind[0]
+                    channels = spikes_ind[1]
+                    plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
+                    plt.xlim([0.0,5.0])
+                    plt.subplot(313)
+                    spikes_ind = np.nonzero(spikes_ts_mismatch[idx])
                     times = spikes_ind[0]
                     channels = spikes_ind[1]
                     plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
                     plt.xlim([0.0,5.0])
                     plt.draw()
                     plt.pause(0.001)
+                    # plt.show()
 
-                predicted_label = self.get_prediction(final_out=final_out)
+                predicted_label = self.get_prediction(final_out)
                 predicted_label_mismatch = self.get_prediction(final_out_mismatch)
 
                 predicted_label_rate = 0
@@ -257,10 +318,12 @@ class HeySnipsNetworkADS(BaseModel):
                     correct_rate += 1
                 counter += 1
 
-                print("--------------------------------", flush=True)
-                print("TESTING batch", batch_id, flush=True)
-                print("Mimsatch std:", self.mismatch_std, "true label", target_labels[idx], "Original", predicted_label, "Mismatch", predicted_label_mismatch, "Rate label", predicted_label_rate, flush=True)
-                print("--------------------------------", flush=True)
+                confusion_matrix[predicted_label_mismatch,target_labels[idx]] += 1
+
+                # print("--------------------------------", flush=True)
+                # print("TESTING batch", batch_id, flush=True)
+                # print("Error:", error_power , "Mimsatch std:", self.mismatch_std, "true label", target_labels[idx], "Original", predicted_label, "Mismatch", predicted_label_mismatch, "Rate label", predicted_label_rate, flush=True)
+                # print("--------------------------------", flush=True)
 
             # - End batch for loop
         # - End testing loop
@@ -268,12 +331,16 @@ class HeySnipsNetworkADS(BaseModel):
         test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
         test_acc_rate = correct_rate / counter
-        print("Test accuracy: Full: %.4f Mismatch: %.4f  Rate: %.4f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (test_acc, test_acc_mismatch, test_acc_rate, sum_error_original / counter, sum_error_mismatch / counter), flush=True)
-
+        print("Deviation error: %.3f Test accuracy: Full: %.4f Mismatch: %.4f  Rate: %.4f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (np.mean(power), test_acc, test_acc_mismatch, test_acc_rate, sum_error_original / counter, sum_error_mismatch / counter), flush=True)
+        print(confusion_matrix)
         self.test_acc_original = test_acc
         self.test_acc_mismatch = test_acc_mismatch
         self.mean_mse_original = sum_error_original / counter
         self.mean_mse_mismatch = sum_error_mismatch / counter
+        self.average_power_error = np.mean(power)
+        self.average_final_mse = np.mean(mse)
+        self.final_outs = final_outs
+        self.targets = targets
 
 
 if __name__ == "__main__":
@@ -284,30 +351,45 @@ if __name__ == "__main__":
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--use-batching', default=False, action="store_true", help="Use the networks trained in batched mode")
+    parser.add_argument('--use-ebn', default=False, action="store_true", help="Use the networks trained with EBNs")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     num_trials = args['num_trials']
     network_idx = args['network_idx']
+    use_batching = args['use_batching']
+    use_ebn = args['use_ebn']
 
-    ads_orig_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_test_accuracies.npy'
-    ads_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_test_accuracies_mismatch.npy'
-    ads_mse_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_mse.npy'
-    ads_mse_mismatch_final_path = f'/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax_mse_mismatch.npy'
+    postfix = ""
+    if(use_batching):
+        postfix += "_batched"
+    if(use_ebn):
+        postfix += "_ebn"
+
+    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_test_accuracies.npy'
+    ads_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_test_accuracies_mismatch.npy'
+    ads_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse.npy'
+    ads_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse_mismatch.npy'
+    ads_power_final_out_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_power_final_out.npy'
+    ads_mse_final_out_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse_final_out.npy'
 
 
     if(os.path.exists(ads_orig_final_path) and os.path.exists(ads_mismatch_final_path) and os.path.exists(ads_mse_final_path) and os.path.exists(ads_mse_mismatch_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    mismatch_stds = [0.05, 0.2, 0.3]
+    mismatch_stds = [0.2, 0.3]
     final_array_original = np.zeros((len(mismatch_stds), num_trials))
     final_array_mismatch = np.zeros((len(mismatch_stds), num_trials))
 
     final_array_mse_original = np.zeros((len(mismatch_stds), num_trials))
     final_array_mse_mismatch = np.zeros((len(mismatch_stds), num_trials))
 
-    batch_size = 50
+    final_array_mse_final_out = np.zeros((len(mismatch_stds), num_trials))
+    final_array_power_final_out = np.zeros((len(mismatch_stds), num_trials))
+
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
@@ -319,10 +401,16 @@ if __name__ == "__main__":
         mse_original = []
         mse_mismatch = []
 
+        mse_final_out = []
+        power_final_out = []
+
+        final_outs = []
+        targets = []
+
         for _ in range(num_trials):
 
             experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                    percentage=1.0,
+                                    percentage=0.1,
                                     snr=snr,
                                     randomize_after_epoch=True,
                                     downsample=1000,
@@ -335,7 +423,11 @@ if __name__ == "__main__":
             num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
             model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
-                                        mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
+                                        mismatch_std=mismatch_std,
+                                        verbose=verbose,
+                                        network_idx=network_idx,
+                                        use_batching=use_batching,
+                                        use_ebn=use_ebn)
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,
@@ -353,6 +445,33 @@ if __name__ == "__main__":
             mse_original.append(model.mean_mse_original)
             mse_mismatch.append(model.mean_mse_mismatch)
 
+            mse_final_out.append(model.average_final_mse)
+            power_final_out.append(model.average_power_error)
+
+            # - Remove
+            final_outs.append(model.final_outs)
+            targets.append(model.targets)
+
+        final_outs = [f for d in final_outs for f in d]
+        targets =  [f for d in targets for f in d]
+        # - Search for best gain
+        gains = np.linspace(1,2,100)
+        best_gain = 1.0
+        best_acc = 0.5
+        for idx_gain in range(len(gains)):
+            gain = gains[idx_gain]
+            correct = 0 ; counter = 0
+            for idx_fo,final_out in enumerate(final_outs):
+                tmp = filter_1d(gain*final_out, alpha=0.95)
+                prediction = model.get_prediction(tmp)
+                if(prediction == targets[idx_fo]):
+                    correct += 1
+                counter += 1
+            if(correct/counter > best_acc):
+                best_gain = gain
+                best_acc = correct/counter
+        print(f"Best gain is {best_gain} with acc. {best_acc}")
+
 
         final_array_original[idx,:] = np.array(accuracies_original)
         final_array_mismatch[idx,:] = np.array(accuracies_mismatch)
@@ -360,11 +479,17 @@ if __name__ == "__main__":
         final_array_mse_original[idx,:] = np.array(mse_original)
         final_array_mse_mismatch[idx,:] = np.array(mse_mismatch)
 
+        final_array_mse_final_out[idx,:] = np.array(mse_final_out)
+        final_array_power_final_out[idx,:] = np.array(power_final_out)
+
     print(final_array_original)
     print(final_array_mismatch)
     print("----------------------------------")
     print(final_array_mse_original)
     print(final_array_mse_mismatch)
+    print("----------------------------------")
+    print(final_array_mse_final_out)
+    print(final_array_power_final_out)
 
     with open(ads_orig_final_path, 'wb') as f:
         np.save(f, final_array_original)
@@ -377,3 +502,9 @@ if __name__ == "__main__":
 
     with open(ads_mse_mismatch_final_path, 'wb') as f:
         np.save(f, final_array_mse_mismatch)
+
+    with open(ads_mse_final_out_final_path, 'wb') as f:
+        np.save(f, final_array_mse_final_out)
+    
+    with open(ads_power_final_out_final_path, 'wb') as f:
+        np.save(f, final_array_power_final_out)

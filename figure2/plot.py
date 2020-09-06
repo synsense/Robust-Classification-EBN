@@ -32,12 +32,6 @@ with open('Resources/Plotting/rate_output.npy', 'rb') as f:
 with open('Resources/Plotting/spiking_output.npy', 'rb') as f:
     final_out = np.load(f)
     print("final_out",final_out.shape)
-with open('Resources/Plotting/omega_f.npy', 'rb') as f:
-    omega_f = np.load(f)
-    print("omega_f",omega_f.shape)
-with open('Resources/Plotting/omega_s.npy', 'rb') as f:
-    omega_s = np.load(f)
-    print("omega_s",omega_s.shape)
 with open('Resources/Plotting/audio_raw.npy', 'rb') as f:
     audio_raw = np.load(f)
     times_audio_raw = np.arange(0,duration,duration/len(audio_raw))
@@ -65,8 +59,8 @@ with open('Resources/Plotting/spike_times.npy', 'rb') as f:
     spike_times = np.load(f)
 
 
-t_start = 0.5
-t_stop = 2.0
+t_start = 0.8
+t_stop = 3.0
 t_start_dynamics = t_start
 
 fig = plt.figure(figsize=(6.14,6.91),constrained_layout=True)

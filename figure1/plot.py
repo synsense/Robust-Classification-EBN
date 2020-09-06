@@ -162,5 +162,5 @@ ax2.plot([0.0,0.2], [-1,-1], color="k", linewidth=0.5)
 ax2.text(x=0.01, y=-1.5, s="200 ms")
 ax2.text(x=0.01, y=10.5, s="A", fontsize=16, fontstyle="oblique")
 
-plt.savefig(f"/home/julian/Documents/RobustClassificationWithEBNs/Figures/{prefix}figure1.png", dpi=1200)
+plt.savefig(f"/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure1.png", dpi=1200)
 plt.show()

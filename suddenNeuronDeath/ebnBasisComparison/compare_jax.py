@@ -54,6 +54,10 @@ class HeySnipsNetworkADS(BaseModel):
         self.network_idx = network_idx
         self.same_boundary = same_boundary
 
+        self.gain_ebn_perturbed = 0.0
+        self.gain_no_ebn_perturbed = 0.0
+        self.out_dict = {}
+
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/"
 
         rate_net_path = os.path.join(self.base_path, "suddenNeuronDeath/Resources/rate_heysnips_tanh_0_16.model")
@@ -117,11 +121,11 @@ class HeySnipsNetworkADS(BaseModel):
             # - Set neuron death parameters
             self.ads_layer_ebn_perturbed.t_start_suppress = 0.0
             self.ads_layer_ebn_perturbed.t_stop_suppress = 5.0
-            self.ads_layer_ebn_perturbed.percentage_suppress = 0.2
+            self.ads_layer_ebn_perturbed.percentage_suppress = 0.4
 
             self.ads_layer_no_ebn_perturbed.t_start_suppress = 0.0
             self.ads_layer_no_ebn_perturbed.t_stop_suppress = 5.0
-            self.ads_layer_no_ebn_perturbed.percentage_suppress = 0.2
+            self.ads_layer_no_ebn_perturbed.percentage_suppress = 0.4
 
         else:
             assert(False), "Some network file was not found"
@@ -131,11 +135,6 @@ class HeySnipsNetworkADS(BaseModel):
         return
 
     def get_data(self, filtered_batch):
-        """
-        :brief Evolves filtered audio samples in the batch through the rate network to obtain target dynamics
-        :params filtered_batch : Shape: [batch_size,T,num_channels], e.g. [100,5000,16]
-        :returns batched_spiking_net_input [batch_size,T,Nc], batched_rate_net_dynamics [batch_size,T,self.Nc], batched_rate_output [batch_size,T,N_out] [Batch size is always first dimensions]
-        """
         num_batches = filtered_batch.shape[0]
         T = filtered_batch.shape[1]
         time_base = np.arange(0,int(T * self.dt),self.dt)
@@ -155,10 +154,57 @@ class HeySnipsNetworkADS(BaseModel):
 
         return (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output)
 
+    def find_gain(self, output_original, output_new):
+        gains = np.linspace(1.0,2.0,50)
+        best_gain=1.0; best_mse=np.inf
+        for gain in gains:
+            mse = 0
+            for idx_b in range(output_original.shape[0]):
+                mse += np.mean( (output_original[idx_b]-gain*output_new[idx_b])**2 )
+            if(mse < best_mse):
+                best_mse=mse
+                best_gain=gain
+        return best_gain
+
+    # - Find the optimal gain for the networks' output
     def perform_validation_set(self, data_loader, fn_metrics):
-        return
+        
+        num_samples = 500
+        bs = data_loader.batch_size
+
+        outputs_ebn = np.zeros((num_samples,5000,1))
+        outputs_no_ebn = np.zeros((num_samples,5000,1))
+        outputs_ebn_perturbed = np.zeros((num_samples,5000,1))
+        outputs_no_ebn_perturbed = np.zeros((num_samples,5000,1))
+
+        for batch_id, [batch, _] in enumerate(data_loader.val_set()):
+
+            # - Validation on 500 samples
+            if (batch_id * data_loader.batch_size >= num_samples):
+                break
+
+            filtered = np.stack([s[0][1] for s in batch])
+            (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
+            _, _, states_t_ebn = vmap(self.ads_layer_ebn._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_ebn._pack(), False, batched_spiking_in)
+            _, _, states_t_no_ebn = vmap(self.ads_layer_no_ebn._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_no_ebn._pack(), False, batched_spiking_in)
+            _, _, states_t_ebn_perturbed = vmap(self.ads_layer_ebn_perturbed._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_ebn_perturbed._pack(), False, batched_spiking_in)
+            _, _, states_t_no_ebn_perturbed = vmap(self.ads_layer_no_ebn_perturbed._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_no_ebn_perturbed._pack(), False, batched_spiking_in)
+            batched_output_ebn = np.squeeze(np.array(states_t_ebn["output_ts"]), axis=-1) @ self.w_out
+            batched_output_no_ebn = np.squeeze(np.array(states_t_no_ebn["output_ts"]), axis=-1) @ self.w_out
+            batched_output_ebn_perturbed = np.squeeze(np.array(states_t_ebn_perturbed["output_ts"]), axis=-1) @ self.w_out
+            batched_output_no_ebn_perturbed = np.squeeze(np.array(states_t_no_ebn_perturbed["output_ts"]), axis=-1) @ self.w_out
+
+            outputs_ebn[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_ebn
+            outputs_no_ebn[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_no_ebn
+            outputs_ebn_perturbed[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_ebn_perturbed
+            outputs_no_ebn_perturbed[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_no_ebn_perturbed
+        
+        # - Find best gains
+        self.gain_ebn_perturbed = self.find_gain(outputs_ebn, outputs_ebn_perturbed)
+        self.gain_no_ebn_perturbed = self.find_gain(outputs_no_ebn, outputs_no_ebn_perturbed)
 
     def train(self, data_loader, fn_metrics):
+        self.perform_validation_set(data_loader, fn_metrics)
         yield {"train_loss": 0.0}
 
     def get_prediction(self, final_out, boundary, threshold_0):
@@ -174,23 +220,43 @@ class HeySnipsNetworkADS(BaseModel):
             predicted_label = 1
         return predicted_label
 
+    def get_mfr(self, spikes):
+        # - Mean firing rate of each neuron in Hz
+        return np.sum(spikes) / (768 * 5.0)
+
     def test(self, data_loader, fn_metrics):
 
         correct_ebn = correct_no_ebn = correct_ebn_perturbed = correct_no_ebn_perturbed = correct_rate = counter = 0
-        reconstruction_drop_ebn = []
-        reconstruction_drop_no_ebn = []
-        re_ebn = []
-        re_no_ebn = []
-        re_ebn_perturbed = []
-        re_no_ebn_perturbed = []
+        
+        # - Store power of difference of the final output between output and rate output
+        final_out_power_ebn = []
+        final_out_power_no_ebn = []
+        final_out_power_ebn_perturbed = []
+        final_out_power_no_ebn_perturbed = []
+
+        final_out_mse_ebn = []
+        final_out_mse_no_ebn = []
+        final_out_mse_ebn_perturbed = []
+        final_out_mse_no_ebn_perturbed = []
+
         mfr_ebn = []
         mfr_no_ebn = []
-        mfr_ebn_pert = []
-        mfr_no_ebn_pert = []
+        mfr_ebn_perturbed = []
+        mfr_no_ebn_perturbed = []
 
-        for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
+        dynamics_power_ebn = []
+        dynamics_power_no_ebn = []
+        dynamics_power_ebn_perturbed = []
+        dynamics_power_no_ebn_perturbed = []
+        
+        dynamics_mse_ebn = []
+        dynamics_mse_no_ebn = []
+        dynamics_mse_ebn_perturbed = []
+        dynamics_mse_no_ebn_perturbed = []
 
-            if (batch_id * data_loader.batch_size >= 100):
+        for batch_id, [batch, _] in enumerate(data_loader.test_set()):
+
+            if (batch_id * data_loader.batch_size >= 1000):
                 break
 
             # - Get input
@@ -201,56 +267,52 @@ class HeySnipsNetworkADS(BaseModel):
 
             # - Evolve every layer over batch
             spikes_ebn, _, states_ebn = vmap(self.ads_layer_ebn._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_ebn._pack(), False, batched_spiking_in)
-            batched_output_ebn = np.squeeze(np.array(states_ebn["output_ts"]), axis=-1)
-
             spikes_ebn_perturbed, _, states_ebn_perturbed = vmap(self.ads_layer_ebn_perturbed._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_ebn_perturbed._pack(), False, batched_spiking_in)
-            batched_output_ebn_perturbed = np.squeeze(np.array(states_ebn_perturbed["output_ts"]), axis=-1)
-
             spikes_no_ebn, _, states_no_ebn = vmap(self.ads_layer_no_ebn._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_no_ebn._pack(), False, batched_spiking_in)
-            batched_output_no_ebn = np.squeeze(np.array(states_no_ebn["output_ts"]), axis=-1)
-
             spikes_no_ebn_perturbed, _, states_no_ebn_perturbed = vmap(self.ads_layer_no_ebn_perturbed._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_no_ebn_perturbed._pack(), False, batched_spiking_in)
+            
+            batched_output_ebn = np.squeeze(np.array(states_ebn["output_ts"]), axis=-1)
+            batched_output_ebn_perturbed = np.squeeze(np.array(states_ebn_perturbed["output_ts"]), axis=-1)
+            batched_output_no_ebn = np.squeeze(np.array(states_no_ebn["output_ts"]), axis=-1)
             batched_output_no_ebn_perturbed = np.squeeze(np.array(states_no_ebn_perturbed["output_ts"]), axis=-1)
 
             for idx in range(len(batch)):
                 
-                # - Compute the final output
                 final_out_ebn = batched_output_ebn[idx] @ self.w_out
                 final_out_no_ebn = batched_output_no_ebn[idx] @ self.w_out
-                final_out_ebn_perturbed = batched_output_ebn_perturbed[idx] @ self.w_out
-                final_out_no_ebn_perturbed = batched_output_no_ebn_perturbed[idx] @ self.w_out
+                final_out_ebn_perturbed = self.gain_ebn_perturbed * (batched_output_ebn_perturbed[idx] @ self.w_out)
+                final_out_no_ebn_perturbed = self.gain_no_ebn_perturbed * (batched_output_no_ebn_perturbed[idx] @ self.w_out)
                 
+                final_out_power_ebn.append( np.var(final_out_ebn-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_no_ebn.append( np.var(final_out_no_ebn-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_ebn_perturbed.append( np.var(final_out_ebn_perturbed-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_no_ebn_perturbed.append( np.var(final_out_no_ebn_perturbed-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+
+                final_out_mse_ebn.append( np.mean( (final_out_ebn-batched_rate_output[idx])**2 ) )
+                final_out_mse_no_ebn.append( np.mean( (final_out_no_ebn-batched_rate_output[idx])**2 ) )
+                final_out_mse_ebn_perturbed.append( np.mean( (final_out_ebn_perturbed-batched_rate_output[idx])**2 ) )
+                final_out_mse_no_ebn_perturbed.append( np.mean( (final_out_no_ebn_perturbed-batched_rate_output[idx])**2 ) )
+
+                mfr_ebn.append(self.get_mfr(np.array(spikes_ebn[idx])))
+                mfr_no_ebn.append(self.get_mfr(np.array(spikes_no_ebn[idx])))
+                mfr_ebn_perturbed.append(self.get_mfr(np.array(spikes_ebn_perturbed[idx])))
+                mfr_no_ebn_perturbed.append(self.get_mfr(np.array(spikes_no_ebn_perturbed[idx])))
+
+                dynamics_power_ebn.append( np.mean(np.var(batched_output_ebn[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_no_ebn.append( np.mean(np.var(batched_output_no_ebn[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_ebn_perturbed.append( np.mean(np.var(batched_output_ebn_perturbed[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_no_ebn_perturbed.append( np.mean(np.var(batched_output_no_ebn_perturbed[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+
+                dynamics_mse_ebn.append( np.mean(np.mean((batched_output_ebn[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_no_ebn.append( np.mean(np.mean((batched_output_no_ebn[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_ebn_perturbed.append( np.mean(np.mean((batched_output_ebn_perturbed[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_no_ebn_perturbed.append( np.mean(np.mean((batched_output_no_ebn_perturbed[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+
                 # - ..and filter
                 final_out_ebn = filter_1d(final_out_ebn, alpha=0.95)
                 final_out_no_ebn = filter_1d(final_out_no_ebn, alpha=0.95)
-                # - Apply global gain
                 final_out_ebn_perturbed = filter_1d(final_out_ebn_perturbed, alpha=0.95)
                 final_out_no_ebn_perturbed = filter_1d(final_out_no_ebn_perturbed, alpha=0.95)
-
-                # - ..compute the errors
-                error_ebn = np.mean(np.mean((batched_rate_net_dynamics[idx]-batched_output_ebn[idx])**2, axis=0))
-                error_no_ebn = np.mean(np.mean((batched_rate_net_dynamics[idx]-batched_output_no_ebn[idx])**2, axis=0))
-                error_ebn_perturbed = np.mean(np.mean((batched_rate_net_dynamics[idx]-batched_output_ebn_perturbed[idx])**2, axis=0))
-                error_no_ebn_perturbed = np.mean(np.mean((batched_rate_net_dynamics[idx]-batched_output_no_ebn_perturbed[idx])**2, axis=0))
-
-                # error_ebn = np.sum(np.var(batched_rate_net_dynamics[idx]-batched_output_ebn[idx], axis=0, ddof=1)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0, ddof=1)))
-                # error_no_ebn = np.sum(np.var(batched_rate_net_dynamics[idx]-batched_output_no_ebn[idx], axis=0, ddof=1)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0, ddof=1)))
-                # error_ebn_perturbed = np.sum(np.var(batched_rate_net_dynamics[idx]-batched_output_ebn_perturbed[idx], axis=0, ddof=1)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0, ddof=1)))
-                # error_no_ebn_perturbed = np.sum(np.var(batched_rate_net_dynamics[idx]-batched_output_no_ebn_perturbed[idx], axis=0, ddof=1)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0, ddof=1)))
-
-                re_ebn.append(error_ebn)
-                re_no_ebn.append(error_no_ebn)
-                re_ebn_perturbed.append(error_ebn_perturbed)
-                re_no_ebn_perturbed.append(error_no_ebn_perturbed)
-
-                reconstruction_drop_ebn.append(error_ebn_perturbed - error_ebn)
-                reconstruction_drop_no_ebn.append(error_no_ebn_perturbed - error_no_ebn)
-
-                # - Save the firing rates
-                mfr_ebn.append(np.sum(spikes_ebn[idx]) / (self.duration*self.num_neurons))
-                mfr_no_ebn.append(np.sum(spikes_no_ebn[idx]) / (self.duration*self.num_neurons))
-                mfr_ebn_pert.append(np.sum(spikes_ebn_perturbed[idx]) / (self.duration*self.num_neurons))
-                mfr_no_ebn_pert.append(np.sum(spikes_no_ebn_perturbed[idx]) / (self.duration*self.num_neurons))
 
                 # - Some plotting
                 if(self.verbose > 0):
@@ -299,11 +361,7 @@ class HeySnipsNetworkADS(BaseModel):
                     correct_rate += 1
                 counter += 1
 
-                print("--------------------------------", flush=True)
-                print("TESTING batch", batch_id, flush=True)
-                print("true label", target_labels[idx], "ebn", predicted_label_ebn, "No EBN", predicted_label_no_ebn, "EBN Pert", predicted_label_ebn_perturbed, "No EBN Pert", predicted_label_no_ebn_perturbed, "Rate label", predicted_label_rate, flush=True)
-                print("Errors: EBN", error_ebn, "No EBN", error_no_ebn, "EBN Pert", error_ebn_perturbed, "No EBN Pert", error_no_ebn_perturbed)
-                print("--------------------------------", flush=True)
+                print(f"true label {target_labels[idx]} ebn {predicted_label_ebn} no ebn {predicted_label_no_ebn} ebn pert. {predicted_label_ebn_perturbed} no ebn pert. {predicted_label_no_ebn_perturbed}", flush=True)
 
             # - End batch for loop
         # - End testing loop
@@ -315,37 +373,42 @@ class HeySnipsNetworkADS(BaseModel):
         test_acc_rate = correct_rate / counter
         print("Test accuracy: ebn: %.4f No EBN: %.4f EBN Pert: %.4f No EBN Pert: %.4f Rate: %.4f" % (test_acc_ebn, test_acc_no_ebn, test_acc_ebn_perturbed, test_acc_no_ebn_perturbed, test_acc_rate), flush=True)
 
-        print("Average drop in reconstruction error: EBN:", np.mean(reconstruction_drop_ebn), "No EBN:", np.mean(reconstruction_drop_no_ebn))
-        print("Average reconstruction error: EBN:", np.mean(re_ebn), "No EBN:", np.mean(re_no_ebn), "EBN Pert.:", np.mean(re_ebn_perturbed), "No EBN Pert.:", np.mean(re_no_ebn_perturbed))
-        print("MFR EBN:", np.mean(mfr_ebn), "MFR No EBN:", np.mean(mfr_no_ebn), "MFR EBN Pert.:", np.mean(mfr_ebn_pert), "MFR No EBN Pert.:", np.mean(mfr_no_ebn_pert))
+        out_dict = {}
+        # - NOTE Save rate accuracy at the last spot!
+        out_dict["test_acc"] = [test_acc_ebn,test_acc_no_ebn,test_acc_ebn_perturbed,test_acc_no_ebn_perturbed,test_acc_rate]
+        out_dict["final_out_power"] = [np.mean(final_out_power_ebn),np.mean(final_out_power_no_ebn),np.mean(final_out_power_ebn_perturbed),np.mean(final_out_power_no_ebn_perturbed)]
+        out_dict["final_out_mse"] = [np.mean(final_out_mse_ebn),np.mean(final_out_mse_no_ebn),np.mean(final_out_mse_ebn_perturbed),np.mean(final_out_mse_no_ebn_perturbed)]
+        out_dict["mfr"] = [np.mean(mfr_ebn),np.mean(mfr_no_ebn),np.mean(mfr_ebn_perturbed),np.mean(mfr_no_ebn_perturbed)]
+        out_dict["dynamics_power"] = [np.mean(dynamics_power_ebn),np.mean(dynamics_power_no_ebn),np.mean(dynamics_power_ebn_perturbed),np.mean(dynamics_power_no_ebn_perturbed)]
+        out_dict["dynamics_mse"] = [np.mean(dynamics_mse_ebn),np.mean(dynamics_mse_no_ebn),np.mean(dynamics_mse_ebn_perturbed),np.mean(dynamics_mse_no_ebn_perturbed)]
 
-        # - Save the output
-        postfix = ""
-        if(self.same_boundary):
-            postfix = "_same_boundary"
-        output_file_path = os.path.join(self.base_path, f"suddenNeuronDeath/Resources/ads_jax_{self.network_idx}_comparison{postfix}.json")
-        to_save = np.asarray([test_acc_ebn, test_acc_no_ebn, test_acc_ebn_perturbed, test_acc_no_ebn_perturbed, test_acc_rate, np.mean(re_ebn), np.mean(re_no_ebn), np.mean(re_ebn_perturbed), np.mean(re_no_ebn_perturbed),
-                                        np.mean(mfr_ebn), np.mean(mfr_no_ebn), np.mean(mfr_ebn_pert), np.mean(mfr_no_ebn_pert)])
-        print(to_save)
-        # with open(output_file_path, 'wb') as f:
-        #     np.save(f, to_save)
+        print(out_dict)
+        # - Save the out_dict in the field of the model (can then be accessed from outside using model.out_dict)
+        self.out_dict = out_dict
 
 
 if __name__ == "__main__":
 
-    np.random.seed(42)
-
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx of network to be analysed")
-    parser.add_argument('--same-boundary', default=False, action="store_true", help="Use the same lower boundary for the prediction")
+    parser.add_argument('--seed', default=42, type=int, help="Seed used in the simulation. Should correspond to network idx")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     network_idx = args['network_idx']
-    same_boundary = args['same_boundary']
+    seed = args['seed']
 
-    batch_size = 1
+    output_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/suddenNeuronDeath/Resources/{network_idx}ads_jax_neuron_failure_out.json'
+
+    # - Avoid re-running for some network-idx
+    if(os.path.exists(output_final_path)):
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
+
+    np.random.seed(seed)
+
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
@@ -364,8 +427,7 @@ if __name__ == "__main__":
 
     model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
                                 verbose=verbose,
-                                network_idx=network_idx,
-                                same_boundary=same_boundary)
+                                network_idx=network_idx)
 
     experiment.set_model(model)
     experiment.set_config({'num_train_batches': num_train_batches,
@@ -376,3 +438,10 @@ if __name__ == "__main__":
                            'snr': snr,
                            'balance_ratio': balance_ratio})
     experiment.start()
+
+    # - Get the recorded data
+    out_dict = model.out_dict
+
+    # - Save the data
+    with open(output_final_path, 'w') as f:
+        json.dump(out_dict, f)    

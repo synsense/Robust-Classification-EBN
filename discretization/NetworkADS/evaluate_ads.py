@@ -463,7 +463,7 @@ if __name__ == "__main__":
     # - For each level of discretization, we store one dictionary containing all the information from above in files with the following path and name
     # - NOTE: The postfix is not required for FORCE, Reservoir and BPTT, since only one version of them exists
 
-    output_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/{network_idx}ads_jax{postfix}_discretization_out.npy'
+    output_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/{network_idx}ads_jax{postfix}_discretization_out.json'
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

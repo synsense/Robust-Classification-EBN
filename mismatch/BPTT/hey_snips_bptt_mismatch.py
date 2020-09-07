@@ -1,8 +1,8 @@
 import warnings
 warnings.filterwarnings('ignore')
-import json
-import numpy as onp
-import jax.numpy as jnp
+import ujson as json
+# import json
+import numpy as np
 from jax import vmap, jit
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
@@ -24,7 +24,6 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from typing import List, Dict
 from copy import copy, deepcopy
 
 def apply_mismatch(net, std_p=0.2):
@@ -35,14 +34,16 @@ def apply_mismatch(net, std_p=0.2):
 
     def _m(d):
         for i,v in enumerate(d):
-            d[i] = onp.random.normal(loc=v, scale=std_p*abs(v))
+            d[i] = np.random.normal(loc=v, scale=std_p*abs(v))
         return d
     
+    # - Simulates applying mismatch to the thresholds. Distance between reset and threshold is 1 so apply std_p as standard deviation
+    # - rather than std_p*value, which would hold only if bias was -1 or 1
     for i,v in enumerate(bias):
-        bias[i] = onp.random.normal(loc=v, scale=std_p)
+        bias[i] = np.random.normal(loc=v, scale=std_p)
     
-    tau_syn = onp.abs(_m(tau_syn))
-    tau_mem = onp.abs(_m(tau_mem))
+    tau_syn = np.abs(_m(tau_syn))
+    tau_mem = np.abs(_m(tau_mem))
 
     # - Create Reservoir layer
     lyrLIFRecurrent_mismatch = RecLIFCurrentInJax_SO(
@@ -55,26 +56,8 @@ def apply_mismatch(net, std_p=0.2):
         name = 'LIF_Reservoir',
     )
 
-    # lyrLIFRecurrent_mismatch = RecLIFCurrentInJax(
-    #     w_recurrent = copy(net.LIF_Reservoir.weights),
-    #     tau_mem = tau_mem,
-    #     tau_syn = tau_syn,
-    #     bias = bias,
-    #     noise_std = 0.0,
-    #     dt = net.dt,
-    #     name = 'LIF_Reservoir',
-    # )
-
-    # lyrOutput_mismatch = FFExpSynJax(
-    #     weights = 2.5*net.LIF_Readout.weights,
-    #     dt = net.dt,
-    #     noise_std = 0.0,
-    #     tau = 0.1,
-    # )
-
     # - Create JaxStack
     net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, deepcopy(net.LIF_Readout)])
-    # net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, lyrOutput_mismatch])
     return net_mismatch
 
 class HeySnipsNetworkADS(BaseModel):
@@ -93,22 +76,21 @@ class HeySnipsNetworkADS(BaseModel):
         self.verbose = verbose
         self.noise_std = 0.0
         self.dt = 0.001
-        self.time_base = onp.arange(0, 5.0, self.dt)
+        self.time_base = np.arange(0, 5.0, self.dt)
         self.threshold = 0.7
-        self.test_accuracy = 0.5
-        self.test_accuracy_mismatch = 0.5
+        self.out_dict = {}
+        self.mismatch_gain = 1.0
         self.mismatch_std = mismatch_std
 
-        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
             config = json.load(f)
 
-        self.w_in = onp.array(config['w_in'])
-        self.w_rec = onp.array(config['w_recurrent'])
-        self.w_out = onp.array(config['w_out'])
+        self.w_in = np.array(config['w_in'])
+        self.w_rec = np.array(config['w_recurrent'])
+        self.w_out = np.array(config['w_out'])
         self.bias = config['bias']
         self.tau_rate = config['tau']
 
@@ -158,150 +140,169 @@ class HeySnipsNetworkADS(BaseModel):
     def train(self, data_loader, fn_metrics):
         yield {"train_loss": 0.0}
 
+    def find_gain(self, target_labels, output_new):
+        gains = np.linspace(1.0,2.0,50)
+        best_gain=1.0; best_acc=0.5
+        for gain in gains:
+            correct = 0
+            for idx_b in range(output_new.shape[0]):
+                predicted_label = self.get_prediction(gain*output_new[idx_b])
+                if(target_labels[idx_b] == predicted_label):
+                    correct += 1
+            if(correct/len(target_labels) > best_acc):
+                best_acc=correct/len(target_labels)
+                best_gain=gain
+        print(f"MM {self.mismatch_std} gain {best_gain} val acc {best_acc} ")
+        return best_gain
+
     def perform_validation_set(self, data_loader, fn_metrics):
-        return
+        num_trials = 5
+        num_samples = 100
+        bs = data_loader.batch_size
+
+        outputs_mismatch = np.zeros((num_samples*num_trials,5000,1))
+
+        true_labels = []
+
+        for trial in range(num_trials):
+            # - Sample new mismatch layer
+            net_mismatch = apply_mismatch(self.net, self.mismatch_std)
+            
+            for batch_id, [batch, _] in enumerate(data_loader.val_set()):
+
+                if (batch_id * data_loader.batch_size >= num_samples):
+                    break
+
+                filtered = np.stack([s[0][1] for s in batch])
+                target_labels = [s[1] for s in batch]
+                batched_output_mismatch, _, _ = vmap(net_mismatch._evolve_functional, in_axes=(None, None, 0))(net_mismatch._pack(), net_mismatch._state, filtered)
+                idx_start = int(trial*num_samples)
+                outputs_mismatch[idx_start:int(idx_start+bs),:,:] = batched_output_mismatch
+                for bi in range(batched_output_mismatch.shape[0]):
+                    true_labels.append(target_labels[bi])
+
+        self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
     def save(self, fn):
         return
 
+    def get_prediction(self, final_out):
+        integral_final_out = np.copy(final_out)
+        integral_final_out[integral_final_out < self.threshold0] = 0.0
+        for t,val in enumerate(integral_final_out):
+            if(val > 0.0):
+                integral_final_out[t] = val + integral_final_out[t-1]
+
+        # - Get final prediction using the integrated response
+        predicted_label = 0
+        if(np.max(integral_final_out) > self.best_boundary):
+            predicted_label = 1
+        return predicted_label
+
     def test(self, data_loader, fn_metrics):
-        correct = 0
-        correct_mismatch = 0
-        correct_rate = 0
-        counter = 0
-        deviation = []
+        correct = correct_mismatch = correct_rate = counter = 0
+
+        final_out_mse_original = []
+        final_out_mse_mismatch = []
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
             if(batch_id*data_loader.batch_size >= 100):
                 break
         
-            filtered = onp.stack([s[0][1] for s in batch])
+            filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
             batched_spiking_output, _, _ = vmap(self.net._evolve_functional, in_axes=(None, None, 0))(self.net._pack(), self.net._state, filtered)
             batched_spiking_output_mismatch, _, _ = vmap(self.net_mismatch._evolve_functional, in_axes=(None, None, 0))(self.net_mismatch._pack(), self.net_mismatch._state, filtered)
-            tgt_signals = onp.stack([s[2] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
             batched_rate_output = self.get_data(filtered_batch=filtered)
 
             counter += batched_spiking_output.shape[0]
 
+            batched_spiking_output_mismatch *= self.mismatch_gain
+
             for idx in range(batched_spiking_output.shape[0]):
 
-                # - Compute the integral for the points that lie above threshold0
-                integral_final_out = onp.copy(batched_spiking_output[idx])
-                integral_final_out[integral_final_out < self.threshold0] = 0.0
-                for t,val in enumerate(integral_final_out):
-                    if(val > 0.0):
-                        integral_final_out[t] = val + integral_final_out[t-1]
+                final_out_mse_original.append( np.mean( (batched_spiking_output[idx]-tgt_signals[idx])**2 ) )
+                final_out_mse_mismatch.append( np.mean( (batched_spiking_output_mismatch[idx]-tgt_signals[idx])**2 ) )
 
-                predicted_label = 0
-                if(onp.max(integral_final_out) > self.best_boundary):
-                    predicted_label = 1
+                predicted_label = self.get_prediction(batched_spiking_output[idx])
+                predicted_label_mismatch = self.get_prediction(batched_spiking_output_mismatch[idx])
+                predicted_rate_label = 0
+                if(np.any(batched_rate_output[idx] > self.threshold)):
+                    predicted_rate_label = 1
 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
-
-                #### Mismatch ####
-                integral_final_out_mismatch = onp.copy(batched_spiking_output_mismatch[idx])
-                integral_final_out_mismatch[integral_final_out_mismatch < self.threshold0] = 0.0
-                for t,val in enumerate(integral_final_out_mismatch):
-                    if(val > 0.0):
-                        integral_final_out_mismatch[t] = val + integral_final_out_mismatch[t-1]
-
-                predicted_label_mismatch = 0
-                if(onp.max(integral_final_out_mismatch) > self.best_boundary):
-                    predicted_label_mismatch = 1
-
                 if(predicted_label_mismatch == target_labels[idx]):
                     correct_mismatch += 1
-
-                #### Rate ####
-                predicted_rate_label = 0
-                if(onp.any(batched_rate_output[idx] > self.threshold)):
-                    predicted_rate_label = 1
-                
                 if(predicted_rate_label == target_labels[idx]):
                     correct_rate += 1
 
-                error_deviation = onp.var(batched_spiking_output[idx]-batched_spiking_output_mismatch[idx]) / onp.var(batched_spiking_output[idx])
-                deviation.append(error_deviation)
-
                 if(self.verbose > 0):
                     plt.clf()
-                    # plt.subplot(311)
                     plt.plot(self.time_base, batched_spiking_output[idx], label="spiking")
                     plt.plot(self.time_base, batched_spiking_output_mismatch[idx], label="mismatch")
                     plt.plot(self.time_base, batched_rate_output[idx], label="rate")
                     plt.ylim([-0.05,1.0])
                     plt.legend()
-                    # plt.subplot(312)
-                    # spikes_rec_ind = onp.nonzero(states_ts_mismatch[1]["out"][idx])
-                    # plt.scatter(0.001*spikes_rec_ind[0], spikes_rec_ind[1], color="k", linewidths=0.0)
-                    # plt.ylim([0,768])
-                    # plt.xlim([0,5.0])
-                    # plt.subplot(313)
-                    # spikes_rec_ind = onp.nonzero(states_ts[1]["out"][idx])
-                    # plt.scatter(0.001*spikes_rec_ind[0], spikes_rec_ind[1], color="k", linewidths=0.0)
-                    # plt.ylim([0,768])
-                    # plt.xlim([0,5.0])
                     plt.draw()
                     plt.pause(0.001)
 
-                print("--------------------", flush=True)
-                print("Batch", batch_id, "Idx", idx , flush=True)
-                print("Error:", error_deviation ,"Mismatch std:", self.mismatch_std, "TESTING: True:", target_labels[idx], "Predicted:", predicted_label, "Predicted MISMATCH", predicted_label_mismatch, "Rate:", predicted_rate_label, flush=True)
-                print("--------------------", flush=True)
+                print(f"MM std: {self.mismatch_std} true label {target_labels[idx]} rate label {predicted_rate_label} orig label {predicted_label} mm label {predicted_label_mismatch}")
 
         # - End for batch
         test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
-        rate_acc = correct_rate / counter
-        print("Deviation error: %.3f Test accuracy is %.3f | Test accuracy MISMATCH is %.3f | Rate accuracy is %.3f" % (onp.mean(deviation), test_acc, test_acc_mismatch, rate_acc), flush=True)
+        test_acc_rate = correct_rate / counter
 
-        # - Save for this model
-        self.test_accuracy = test_acc
-        self.test_accuracy_mismatch = test_acc_mismatch
+        out_dict = {}
+        # - NOTE Save rate accuracy at the last spot!
+        out_dict["test_acc"] = [test_acc,test_acc_mismatch,test_acc_rate]
+        out_dict["final_out_mse"] = [np.mean(final_out_mse_original).item(),np.mean(final_out_mse_mismatch).item()]
+
+        print(out_dict)
+        # - Save the out_dict in the field of the model (can then be accessed from outside using model.out_dict)
+        self.out_dict = out_dict
+
 
 if __name__ == "__main__":
 
-    onp.random.seed(42)
+    np.random.seed(42)
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     
     args = vars(parser.parse_args())
     verbose = args['verbose']
-    percentage_data = args['percentage_data']
     num_trials = args['num_trials']
     network_idx = args['network_idx']
 
-    bptt_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies.npy'
-    bptt_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}bptt_test_accuracies_mismatch.npy'
+    bptt_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/bptt{network_idx}_mismatch_analysis_output.json'
 
-    if(os.path.exists(bptt_orig_final_path) and os.path.exists(bptt_mismatch_final_path)):
+    if(os.path.exists(bptt_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        # sys.exit(0)
+        sys.exit(0)
 
     batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
-    mismatch_stds = [0.2, 0.2, 0.3]
-    final_array_original = onp.zeros((len(mismatch_stds), num_trials))
-    final_array_mismatch = onp.zeros((len(mismatch_stds), num_trials))
+    mismatch_stds = [0.05, 0.2, 0.3]
+
+    output_dict = {}
 
     for idx,mismatch_std in enumerate(mismatch_stds):
 
-        accuracies_original = []
-        accuracies_mismatch = []
+        mm_output_dicts = []
+        mismatch_gain = 1.0
 
-        for _ in range(num_trials):
+        for trial_idx in range(num_trials):
 
             experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                percentage=percentage_data,
+                                percentage=1.0,
                                 snr=snr,
                                 randomize_after_epoch=True,
                                 downsample=1000,
@@ -309,34 +310,37 @@ if __name__ == "__main__":
                                 cache_folder=None,
                                 one_hot=False)
             
-            num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
-            num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
-            num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+            num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+            num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+            num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
             model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels, mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
+
+            if(trial_idx == 0):
+                model.perform_validation_set(experiment._data_loader, 0.0)
+                mismatch_gain = model.mismatch_gain
+            # - Set the mismatch gain that was computed in the first trial
+            model.mismatch_gain = mismatch_gain
 
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,
                                 'num_val_batches': num_val_batches,
                                 'num_test_batches': num_test_batches,
                                 'batch size': batch_size,
-                                'percentage data': percentage_data,
+                                'percentage data': 1.0,
                                 'snr': snr,
                                 'balance_ratio': balance_ratio})
             experiment.start()
 
-            accuracies_original.append(model.test_accuracy)
-            accuracies_mismatch.append(model.test_accuracy_mismatch)
+            mm_output_dicts.append(model.out_dict)
 
-        final_array_original[idx,:] = onp.array(accuracies_original)
-        final_array_mismatch[idx,:] = onp.array(accuracies_mismatch)
+        output_dict[str(mismatch_std)] = mm_output_dicts
 
-    print(final_array_original)
-    print(final_array_mismatch)
 
-    with open(bptt_orig_final_path, 'wb') as f:
-        onp.save(f, final_array_original)
+    print(output_dict['0.05'])
+    print(output_dict['0.2'])
+    print(output_dict['0.3'])
 
-    with open(bptt_mismatch_final_path, 'wb') as f:
-        onp.save(f, final_array_mismatch)
-
+    # - Save
+    with open(bptt_orig_final_path, 'w') as f:
+        json.dump(output_dict, f)

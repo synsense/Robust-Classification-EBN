@@ -1,14 +1,8 @@
 import warnings
 warnings.filterwarnings('ignore')
 import ujson as json
-import numpy as onp
+import numpy as np
 from jax import vmap
-from jax import numpy as jnp
-
-# from jax.config import config
-# config.update('jax_disable_jit', True)
-# config.update('jax_log_compiles', 1)
-
 import matplotlib.pyplot as plt
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
@@ -56,9 +50,6 @@ class HeySnipsNetworkADS(BaseModel):
         self.verbose = verbose
         self.fs = fs
         self.dt = 0.001
-        # if(use_ebn):
-        #     self.dt = 0.0001
-        
 
         self.num_val = num_val
         self.num_test = num_test
@@ -71,20 +62,19 @@ class HeySnipsNetworkADS(BaseModel):
 
         self.num_rate_neurons = 128 
         self.num_targets = len(labels)
-        self.time_base = onp.arange(0,5.0,self.dt)
+        self.time_base = np.arange(0,5.0,self.dt)
         self.use_batching = use_batching
         self.use_ebn = use_ebn
 
-        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
             config = json.load(f)
 
-        self.w_in = onp.array(config['w_in'])
-        self.w_rec = onp.array(config['w_recurrent'])
-        self.w_out = onp.array(config['w_out'])
+        self.w_in = np.array(config['w_in'])
+        self.w_rec = np.array(config['w_recurrent'])
+        self.w_out = np.array(config['w_out'])
         self.bias = config['bias']
         self.tau_rate = config['tau']
 
@@ -100,7 +90,7 @@ class HeySnipsNetworkADS(BaseModel):
                                              
         self.N_out = self.w_out.shape[1]
 
-        onp.random.seed(seed)
+        np.random.seed(seed)
         # - Create NetworkADS
         postfix = ""
         if(self.use_batching):
@@ -113,9 +103,6 @@ class HeySnipsNetworkADS(BaseModel):
         if(os.path.exists(self.model_path_ads_net)):
             print("Loaded pretrained network from %s" % self.model_path_ads_net)
             sys.exit(0)
-            self.ads_layer = self.load(self.model_path_ads_net)
-            self.tau_mem = self.ads_layer.tau_mem[0]
-            self.Nc = self.ads_layer.weights_in.shape[0]
         else:
             self.Nc = self.num_rate_neurons
             self.num_neurons = num_neurons
@@ -129,29 +116,29 @@ class HeySnipsNetworkADS(BaseModel):
             tau_syn_fast = 0.001
             mu = 0.0005
             nu = 0.0001
-            D = onp.random.randn(self.Nc,self.num_neurons) / self.Nc
+            D = np.random.randn(self.Nc,self.num_neurons) / self.Nc
             k = 10 / self.tau_mem
-            v_thresh = (nu * lambda_d + mu * lambda_d**2 + onp.sum(abs(D.T), -1, keepdims = True)**2) / 2
-            v_thresh_target = 1.0*onp.ones((self.num_neurons,)) # - V_thresh
-            v_rest_target = 0.5*onp.ones((self.num_neurons,)) # - V_rest = b
+            v_thresh = (nu * lambda_d + mu * lambda_d**2 + np.sum(abs(D.T), -1, keepdims = True)**2) / 2
+            v_thresh_target = 1.0*np.ones((self.num_neurons,)) # - V_thresh
+            v_rest_target = 0.5*np.ones((self.num_neurons,)) # - V_rest = b
             b = v_rest_target
             a = v_thresh_target - b
-            D_realistic = a*onp.divide(D, v_thresh.ravel())
+            D_realistic = a*np.divide(D, v_thresh.ravel())
             weights_in_realistic = D_realistic
             weights_out_realistic = D_realistic.T
             v_reset_target = b - a
             noise_std_realistic = 0.00
 
-            weights_fast_realistic = onp.zeros((self.num_neurons,self.num_neurons))
+            weights_fast_realistic = np.zeros((self.num_neurons,self.num_neurons))
             if(self.use_ebn):
-                weights_fast = (D.T@D + mu*lambda_d**2*onp.eye(self.num_neurons))
-                onp.fill_diagonal(weights_fast, 0)
-                weights_fast_realistic = -1.5*onp.divide(weights_fast.T, v_thresh.ravel()).T
+                weights_fast = (D.T@D + mu*lambda_d**2*np.eye(self.num_neurons))
+                np.fill_diagonal(weights_fast, 0)
+                weights_fast_realistic = -1.5*np.divide(weights_fast.T, v_thresh.ravel()).T
 
             self.ads_layer = JaxADS(weights_in = weights_in_realistic * self.tau_mem,
                                     weights_out = weights_out_realistic * self.tau_mem,
                                     weights_fast = weights_fast_realistic,
-                                    weights_slow = onp.zeros((self.num_neurons,self.num_neurons)),
+                                    weights_slow = np.zeros((self.num_neurons,self.num_neurons)),
                                     eta = self.eta,
                                     k = k,
                                     noise_std = noise_std_realistic,
@@ -170,7 +157,7 @@ class HeySnipsNetworkADS(BaseModel):
             self.best_val_acc = 0.0
         # - End else create network
 
-        onp.random.seed(42)
+        np.random.seed(42) # - Ensure training on same data
         self.best_model = self.ads_layer
         self.amplitude = 50 / self.tau_mem
 
@@ -198,10 +185,10 @@ class HeySnipsNetworkADS(BaseModel):
         """
         num_batches = filtered_batch.shape[0]
         T = filtered_batch.shape[1]
-        time_base = onp.arange(0,int(T * self.dt),self.dt)
-        batched_spiking_in = onp.empty(shape=(batch_size,T,self.Nc))
-        batched_rate_net_dynamics = onp.empty(shape=(batch_size,T,self.Nc))
-        batched_rate_output = onp.empty(shape=(batch_size,T,self.N_out))
+        time_base = np.arange(0,int(T * self.dt),self.dt)
+        batched_spiking_in = np.empty(shape=(batch_size,T,self.Nc))
+        batched_rate_net_dynamics = np.empty(shape=(batch_size,T,self.Nc))
+        batched_rate_output = np.empty(shape=(batch_size,T,self.N_out))
         # - This can be parallelized
         for batch_id in range(num_batches):
             # - Pass through the rate network
@@ -217,18 +204,18 @@ class HeySnipsNetworkADS(BaseModel):
 
     def check_balance(self, batched_spiking_in):
         spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
-        batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
-        batched_vmem = onp.squeeze(onp.array(states_t["Vmem"]), axis=-1)
+        batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
+        batched_vmem = np.squeeze(np.array(states_t["Vmem"]), axis=-1)
         w_fast = copy(self.ads_layer.weights_fast)
         self.ads_layer.weights_fast *= 0
         spikes_ts_no_fast, _, states_t_no_fast = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
-        batched_output_no_fast = onp.squeeze(onp.array(states_t_no_fast["output_ts"]), axis=-1)
-        batched_vmem_no_fast = onp.squeeze(onp.array(states_t_no_fast["Vmem"]), axis=-1)
+        batched_output_no_fast = np.squeeze(np.array(states_t_no_fast["output_ts"]), axis=-1)
+        batched_vmem_no_fast = np.squeeze(np.array(states_t_no_fast["Vmem"]), axis=-1)
         self.ads_layer.weights_fast = w_fast
         d_fast = batched_output[0]
         d_no_fast = batched_output_no_fast[0]
-        error_fast = onp.mean(onp.linalg.norm(d_fast-0.0005*batched_spiking_in[0],axis=0))
-        error_no_fast = onp.mean(onp.linalg.norm(d_no_fast-0.0005*batched_spiking_in[0],axis=0))
+        error_fast = np.mean(np.linalg.norm(d_fast-0.0005*batched_spiking_in[0],axis=0))
+        error_no_fast = np.mean(np.linalg.norm(d_no_fast-0.0005*batched_spiking_in[0],axis=0))
         if(self.verbose > 0):
             plt.subplot(611)
             plt.title("With EBN")
@@ -236,7 +223,7 @@ class HeySnipsNetworkADS(BaseModel):
                 plt.plot(i*0.5+d_fast[:,i], color=f"C{str(i)}")
                 plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
             plt.subplot(612)
-            plt.scatter(onp.nonzero(spikes_ts[0])[0]*self.dt, onp.nonzero(spikes_ts[0])[1], color="k", linewidths=0.0)
+            plt.scatter(np.nonzero(spikes_ts[0])[0]*self.dt, np.nonzero(spikes_ts[0])[1], color="k", linewidths=0.0)
             plt.xlim([0,5.0])
             plt.subplot(613)
             plt.title("No EBN")
@@ -244,7 +231,7 @@ class HeySnipsNetworkADS(BaseModel):
                 plt.plot(i*0.5+d_no_fast[:,i], color=f"C{str(i)}")
                 plt.plot(i*0.5+0.0005*batched_spiking_in[0,:,i], color=f"C{str(i)}")
             plt.subplot(614)
-            plt.scatter(onp.nonzero(spikes_ts_no_fast[0])[0]*self.dt, onp.nonzero(spikes_ts_no_fast[0])[1], color="k", linewidths=0.0)
+            plt.scatter(np.nonzero(spikes_ts_no_fast[0])[0]*self.dt, np.nonzero(spikes_ts_no_fast[0])[1], color="k", linewidths=0.0)
             plt.xlim([0,5.0])
             plt.subplot(615)
             for i in range(10):
@@ -272,25 +259,15 @@ class HeySnipsNetworkADS(BaseModel):
                                     step_size=step_size,
                                     start_k = self.ads_layer.k)
         if(total_num_iter > 0):
-            f_k = lambda t : onp.maximum(step_size,k_of_t[t])
+            f_k = lambda t : np.maximum(step_size,k_of_t[t])
             if(self.verbose > 1):
-                plt.plot(onp.arange(0,total_num_iter),f_k(onp.arange(0,total_num_iter))); plt.title("Decay schedule for k"); plt.show()
+                plt.plot(np.arange(0,total_num_iter),f_k(np.arange(0,total_num_iter))); plt.title("Decay schedule for k"); plt.show()
         else:
             f_k = lambda t : 0
 
-        # - Create schedule for eta
-        a_eta = self.ads_layer.eta
-        b_eta = (total_num_iter/2) / onp.log(100)
-        c_eta = 0.0000001
-        f_eta = lambda t,a_eta,b_eta : a_eta*onp.exp(-t/b_eta) + c_eta
-
-        if(self.verbose > 1):
-            plt.plot(onp.arange(0,total_num_iter),f_eta(onp.arange(0,total_num_iter),a_eta,b_eta))
-            plt.title("Decay schedule for eta"); plt.legend(); plt.show()
-
         time_horizon = 50
-        recon_erros = onp.ones((time_horizon,))
-        avg_training_acc = onp.zeros((time_horizon,)); avg_training_acc[:int(time_horizon/2)] = 1.0
+        recon_erros = np.ones((time_horizon,))
+        avg_training_acc = np.zeros((time_horizon,)); avg_training_acc[:int(time_horizon/2)] = 1.0
         time_track = []
 
         for epoch in range(self.num_epochs):
@@ -299,9 +276,9 @@ class HeySnipsNetworkADS(BaseModel):
 
             for batch_id, [batch, _] in enumerate(data_loader.train_set()):
 
-                filtered = onp.stack([s[0][1] for s in batch])
+                filtered = np.stack([s[0][1] for s in batch])
                 target_labels = [s[1] for s in batch]
-                tgt_signals = onp.stack([s[2] for s in batch])
+                tgt_signals = np.stack([s[2] for s in batch])
                 (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
                 predicted_labels_batch = []
                 target_labels_batch = []
@@ -319,7 +296,7 @@ class HeySnipsNetworkADS(BaseModel):
 
                 for idx in range(batched_output.shape[0]):
                     target_val = batched_rate_net_dynamics[idx]
-                    error = onp.sum(onp.var(target_val-batched_output[idx], axis=0, ddof=1)) / (onp.sum(onp.var(target_val, axis=0, ddof=1)))
+                    error = np.sum(np.var(target_val-batched_output[idx], axis=0, ddof=1)) / (np.sum(np.var(target_val, axis=0, ddof=1)))
                     recon_erros[1:] = recon_erros[:-1]
                     recon_erros[0] = error
                     if(not was_first):
@@ -346,7 +323,7 @@ class HeySnipsNetworkADS(BaseModel):
                         plt.pause(0.001)
 
                     # - Determine if the classification was correct based on the treshold, not on the integral
-                    if(onp.any(final_out > self.threshold)):
+                    if(np.any(final_out > self.threshold)):
                         predicted_label = 1
                     else:
                         predicted_label = 0
@@ -363,8 +340,8 @@ class HeySnipsNetworkADS(BaseModel):
                     # - Some printing...
                     print("--------------------", flush=True)
                     print("Epoch", epoch, "Batch ID", batch_id , flush=True)
-                    training_acc = onp.sum(avg_training_acc)/time_horizon
-                    reconstruction_acc = onp.mean(recon_erros)
+                    training_acc = np.sum(avg_training_acc)/time_horizon
+                    reconstruction_acc = np.mean(recon_erros)
                     time_track.append(num_batch_iterations)
                     print("Target label", target_labels[idx], "Predicted label", predicted_label, ("Avg. training acc. %.4f" % (training_acc)), "Error: ", error, ("Avg. reconstruction error %.4f" % (reconstruction_acc)), "K", self.ads_layer.k, flush=True)
                     print("--------------------", flush=True)
@@ -394,25 +371,25 @@ class HeySnipsNetworkADS(BaseModel):
         counter = 0
         integral_pairs = []
 
-        for batch_id, [batch, val_logger] in enumerate(data_loader.val_set()):
+        for batch_id, [batch, _] in enumerate(data_loader.val_set()):
             if(batch_id * data_loader.batch_size >= self.num_val):
                 break
 
             # - Get input
-            filtered = onp.stack([s[0][1] for s in batch])
+            filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            tgt_signals = onp.stack([s[2] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
             (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
 
             _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
-            batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
+            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
 
             for idx in range(len(target_labels)):
                 # - Get the output
                 out_val = batched_output[idx]
                 target_val = batched_rate_net_dynamics[idx]
 
-                error = onp.sum(onp.var(target_val-out_val, axis=0, ddof=1)) / (onp.sum(onp.var(target_val, axis=0, ddof=1)))
+                error = np.sum(np.var(target_val-out_val, axis=0, ddof=1)) / (np.sum(np.var(target_val, axis=0, ddof=1)))
                 errors.append(error)
 
                 # - Compute the final output
@@ -434,13 +411,13 @@ class HeySnipsNetworkADS(BaseModel):
                     plt.pause(0.001)
 
                 # - Compute the integral for the points that lie above threshold0
-                integral_final_out = onp.copy(final_out)
+                integral_final_out = np.copy(final_out)
                 integral_final_out[integral_final_out < self.threshold0] = 0.0
                 for t,val in enumerate(integral_final_out):
                     if(val > 0.0):
                         integral_final_out[t] = val + integral_final_out[t-1]
 
-                integral_pairs.append((onp.max(integral_final_out),target_labels[idx]))
+                integral_pairs.append((np.max(integral_final_out),target_labels[idx]))
             
                 # - What do we predict?
                 if((final_out > self.threshold).any()):
@@ -476,14 +453,14 @@ class HeySnipsNetworkADS(BaseModel):
         same_as_rate_acc = same_as_rate / counter
         rate_acc = correct_rate / counter
         val_acc = correct / counter
-        print("Validation accuracy is %.3f | Compared to rate is %.3f | Rate accuracy is %.3f" % (val_acc, same_as_rate_acc, rate_acc), flush=True)
+        print(f"Validation accuracy is {val_acc} | Compared to rate is {same_as_rate} | Rate accuracy is {rate_acc}", flush=True)
 
         # - Find best boundaries for classification using the continuous integral
-        min_val = onp.min([x for (x,y) in integral_pairs])
-        max_val = onp.max([x for (x,y) in integral_pairs])
+        min_val = np.min([x for (x,y) in integral_pairs])
+        max_val = np.max([x for (x,y) in integral_pairs])
         best_boundary = min_val
         best_acc = 0.5
-        for boundary in onp.linspace(min_val, max_val, 1000):
+        for boundary in np.linspace(min_val, max_val, 1000):
             acc = (len([x for (x,y) in integral_pairs if y == 1 and x > boundary]) + len([x for (x,y) in integral_pairs if y == 0 and x <= boundary])) / len(integral_pairs)
             if(acc >= best_acc):
                 best_acc = acc
@@ -491,15 +468,12 @@ class HeySnipsNetworkADS(BaseModel):
         
         self.best_boundary = best_boundary
         print(f"Best validation accuracy after finding boundary is {best_acc}")
-
-        return (best_acc, onp.mean(onp.asarray(errors)))
+        return (best_acc, np.mean(np.asarray(errors)))
 
 
     def test(self, data_loader, fn_metrics):
 
-        correct = 0
-        correct_rate = 0
-        counter = 0
+        correct = correct_rate = counter = 0
         integral_pairs = []
 
         # - Load the best model
@@ -511,14 +485,13 @@ class HeySnipsNetworkADS(BaseModel):
                 break
 
             # - Get input
-            # batched_audio_raw = onp.stack([s[0][0] for s in batch])
-            filtered = onp.stack([s[0][1] for s in batch])
+            filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            tgt_signals = onp.stack([s[2] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
             (batched_spiking_in, _, batched_rate_output) = self.get_data(filtered_batch=filtered)
 
             _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
-            batched_output = onp.squeeze(onp.array(states_t["output_ts"]), axis=-1)
+            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
 
             for idx in range(len(target_labels)):
 
@@ -527,7 +500,6 @@ class HeySnipsNetworkADS(BaseModel):
 
                 # - Compute the final output
                 final_out = out_test @ self.w_out
-                # - ..and filter
                 final_out = filter_1d(final_out, alpha=0.95)
 
                 # - Some plotting
@@ -543,24 +515,22 @@ class HeySnipsNetworkADS(BaseModel):
                     plt.draw()
                     plt.pause(0.001)
 
-                integral_final_out = onp.copy(final_out)
+                integral_final_out = np.copy(final_out)
                 integral_final_out[integral_final_out < self.threshold0] = 0.0
                 for t,val in enumerate(integral_final_out):
                     if(val > 0.0):
                         integral_final_out[t] = val + integral_final_out[t-1]
 
-                integral_pairs.append((onp.max(integral_final_out),target_labels[idx]))
+                integral_pairs.append((np.max(integral_final_out),target_labels[idx]))
 
                 # - Get final prediction using the integrated response
-                if(onp.max(integral_final_out) > self.best_boundary):
+                predicted_label = 0
+                if(np.max(integral_final_out) > self.best_boundary):
                     predicted_label = 1
-                else:
-                    predicted_label = 0
 
+                predicted_label_rate = 0
                 if((batched_rate_output[idx] > 0.7).any()):
                     predicted_label_rate = 1
-                else:
-                    predicted_label_rate = 0
 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
@@ -578,12 +548,12 @@ class HeySnipsNetworkADS(BaseModel):
 
         test_acc = correct / counter
         test_acc_rate = correct_rate / counter
-        print("Test accuracy is %.4f Rate network test accuracy is %.4f" % (test_acc, test_acc_rate), flush=True)
+        print(f"Test accuracy is {test_acc} Rate network test accuracy is {test_acc_rate}", flush=True)
 
 
 if __name__ == "__main__":
 
-    onp.random.seed(42)
+    np.random.seed(42)
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
@@ -597,8 +567,6 @@ if __name__ == "__main__":
     parser.add_argument('--num-val', default=500, type=int, help="Number of validation samples")
     parser.add_argument('--num-test', default=1000, type=int, help="Number of test samples")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    # parser.add_argument('--discretize', default=-1, type=int, help="Number of total different synaptic weights. -1 means no discretization. 8 means 3-bit precision.")
-    # parser.add_argument('--discretize-dynapse', default=False, action='store_true', help="Respect constraint of DYNAP-SE of having only 64 synapses per neuron. --discretize must not be -1.")
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     parser.add_argument('--seed', default=42, type=int, help="Random seed")
     parser.add_argument('--use-batching', default=False, action='store_true', help="Use batching")
@@ -615,8 +583,6 @@ if __name__ == "__main__":
     num_val = args['num_val']
     num_test = args['num_test']
     percentage_data = args['percentage_data']
-    # discretize_dynapse = args['discretize_dynapse']
-    # discretize = args['discretize']
     network_idx = args['network_idx']
     seed = args['seed']
     use_batching = args['use_batching']
@@ -626,22 +592,18 @@ if __name__ == "__main__":
     balance_ratio = 1.0
     snr = 10.
 
-    downsample = 1000
-    # if(use_ebn):
-    #     downsample = 10000
-
     experiment = HeySnipsDEMAND(batch_size=batch_size,
                             percentage=percentage_data,
                             snr=snr,
                             randomize_after_epoch=True,
-                            downsample=downsample,
+                            downsample=1000,
                             is_tracking=False,
                             one_hot=False,
                             cache_folder=None)
 
-    num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
-    num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
-    num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+    num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+    num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+    num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
     model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels,
                                 num_neurons=num,

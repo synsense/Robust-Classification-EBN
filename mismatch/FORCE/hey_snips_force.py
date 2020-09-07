@@ -1,8 +1,7 @@
 import warnings
 warnings.filterwarnings('ignore')
-import json
-import numpy as onp
-import jax.numpy as jnp
+import ujson as json
+import numpy as np
 from jax import vmap, jit
 import jax
 
@@ -60,7 +59,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.verbose = verbose
         self.noise_std = 0.0
         self.dt = 0.001
-        self.time_base = onp.arange(0, 5.0, self.dt)
+        self.time_base = np.arange(0, 5.0, self.dt)
         self.network_idx = network_idx
 
         self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch/"
@@ -71,9 +70,9 @@ class HeySnipsNetworkFORCE(BaseModel):
         with open(rate_net_path, "r") as f:
             config = json.load(f)
 
-        self.w_in = onp.array(config['w_in'])
-        self.w_rec = onp.array(config['w_recurrent'])
-        self.w_out = onp.array(config['w_out'])
+        self.w_in = np.array(config['w_in'])
+        self.w_rec = np.array(config['w_recurrent'])
+        self.w_out = np.array(config['w_out'])
         self.bias = config['bias']
         self.tau_rate = config['tau']
 
@@ -94,14 +93,12 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.lr_params = self.rate_layer._pack()
         self.lr_state = self.rate_layer._state
 
-        onp.random.seed(seed)
+        np.random.seed(seed)
         # - Create spiking net
         self.model_path_force_net = os.path.join(self.base_path, self.network_name)
         if(os.path.exists(self.model_path_force_net)):
             print("FORCE network already trained. Exiting. If you would like to re-train the network, re-name/delete the model and execute this script.")
             sys.exit(0)
-            # self.force_layer = self.load_net(self.model_path_force_net)
-            # print("Loaded pretrained force layer")
         else:
             # - Create weight matrices etc.
             self.t_ref = 0.002
@@ -115,16 +112,16 @@ class HeySnipsNetworkFORCE(BaseModel):
             Q = 10
             G = 0.04
 
-            D = onp.random.randn(self.Nc, self.num_neurons)
+            D = np.random.randn(self.Nc, self.num_neurons)
 
-            OMEGA = G*(onp.random.randn(self.num_neurons,self.num_neurons)) * (onp.random.random(size=(self.num_neurons,self.num_neurons)) < p).astype(int) / (onp.sqrt(self.num_neurons)*p)
-            BPhi = onp.zeros((self.num_neurons,self.Nc)) # The initial matrix that will be learned by FORCE method
+            OMEGA = G*(np.random.randn(self.num_neurons,self.num_neurons)) * (np.random.random(size=(self.num_neurons,self.num_neurons)) < p).astype(int) / (np.sqrt(self.num_neurons)*p)
+            BPhi = np.zeros((self.num_neurons,self.Nc)) # The initial matrix that will be learned by FORCE method
 
             for i in range(self.num_neurons):
-                QS = onp.abs(OMEGA[i,:])>0
-                OMEGA[i,QS] = OMEGA[i,QS] - onp.sum(OMEGA[i,QS])/onp.sum(QS.astype(int))
+                QS = np.abs(OMEGA[i,:])>0
+                OMEGA[i,QS] = OMEGA[i,QS] - np.sum(OMEGA[i,QS])/np.sum(QS.astype(int))
 
-            E = (2*onp.random.random(size=(self.num_neurons,self.Nc))-1)*Q
+            E = (2*np.random.random(size=(self.num_neurons,self.Nc))-1)*Q
             
             self.force_layer = JaxFORCE(w_in = D,
                                     w_rec = OMEGA,
@@ -143,7 +140,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
 
         self.best_model = self.force_layer
-        onp.random.seed(42)
+        np.random.seed(42)
 
     def save(self, fn, use_best = False):
         if(use_best):
@@ -177,7 +174,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
     def train(self, data_loader, fn_metrics):
         time_horizon = 50
-        avg_loss = onp.ones((time_horizon,))
+        avg_loss = np.ones((time_horizon,))
 
         self.best_model = self.force_layer
         was_lower = 0
@@ -188,7 +185,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
             for batch_id, [batch, _] in enumerate(data_loader.train_set()):
 
-                filtered = onp.stack([s[0][1] for s in batch])
+                filtered = np.stack([s[0][1] for s in batch])
                 _, batched_res_inputs, batched_res_acts = self.get_data(filtered_batch=filtered)
 
                 # - Do the training step
@@ -196,14 +193,14 @@ class HeySnipsNetworkFORCE(BaseModel):
                 ts_out_train = self.force_layer.train_output_target(batched_res_inputs, batched_res_acts)
                 self.force_layer.reset_time()
 
-                recon_error = float(onp.mean(onp.sum(onp.var(batched_res_acts-ts_out_train, axis=1, ddof=1),axis=1) / (onp.sum(onp.var(batched_res_acts, axis=1, ddof=1), axis=1))))
+                recon_error = float(np.mean(np.sum(np.var(batched_res_acts-ts_out_train, axis=1, ddof=1),axis=1) / (np.sum(np.var(batched_res_acts, axis=1, ddof=1), axis=1))))
                 epoch_loss += recon_error
                 avg_loss[1:] = avg_loss[:-1]
                 avg_loss[0] = recon_error
 
                 print("--------------------", flush=True)
                 print("Epoch", epoch, "Batch ID", batch_id , flush=True)
-                print("Loss", onp.mean(avg_loss), flush=True)
+                print("Loss", np.mean(avg_loss), flush=True)
                 print("--------------------", flush=True)
 
                 # jax.profiler.save_device_memory_profile(f"memory{batch_id}.prof")
@@ -212,10 +209,10 @@ class HeySnipsNetworkFORCE(BaseModel):
                     # - Also evolve over input and plot a little bit
                     plt.clf()
                     plot_num = 10
-                    stagger_out = onp.ones((batched_res_acts.shape[1], plot_num))
+                    stagger_out = np.ones((batched_res_acts.shape[1], plot_num))
                     for i in range(plot_num):
                         stagger_out[:,i] *= i
-                    times = onp.arange(0,5,0.001)
+                    times = np.arange(0,5,0.001)
                     colors = [("C%d"%i) for i in range(2,plot_num+2)]
                     l1 = plt.plot(times, (stagger_out+ts_out_train[0,:,:plot_num]))
                     for line, color in zip(l1,colors):
@@ -265,9 +262,9 @@ class HeySnipsNetworkFORCE(BaseModel):
             if(batch_id*data_loader.batch_size > 1000):
                 break
 
-            filtered = onp.stack([s[0][1] for s in batch])
+            filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            tgt_signals = onp.stack([s[2] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
             batched_rate_output, batched_res_inputs, _ = self.get_data(filtered_batch=filtered)
 
             # - Evolve
@@ -282,22 +279,22 @@ class HeySnipsNetworkFORCE(BaseModel):
             for idx in range(batched_final_out.shape[0]):
 
                 # - Compute the integral for the points that lie above threshold0
-                integral_final_out = onp.array(batched_final_out[idx])
+                integral_final_out = np.array(batched_final_out[idx])
                 integral_final_out[integral_final_out < self.threshold0] = 0.0
                 for t,val in enumerate(integral_final_out):
                     if(val > 0.0):
                         integral_final_out[t] = val + integral_final_out[t-1]
-                integral_pairs.append((onp.max(integral_final_out),target_labels[idx]))
+                integral_pairs.append((np.max(integral_final_out),target_labels[idx]))
 
                 predicted_label = 0
-                if(onp.any(batched_final_out[idx] > self.threshold)):
+                if(np.any(batched_final_out[idx] > self.threshold)):
                     predicted_label = 1
                 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
 
                 predicted_rate_label = 0
-                if(onp.any(batched_final_out[idx] > self.threshold)):
+                if(np.any(batched_final_out[idx] > self.threshold)):
                     predicted_rate_label = 1
                 
                 if(predicted_rate_label == target_labels[idx]):
@@ -325,11 +322,11 @@ class HeySnipsNetworkFORCE(BaseModel):
         print("Validation accuracy is %.3f | Rate accuracy is %.3f" % (val_acc, rate_acc), flush=True)
 
         # - Find best boundaries for classification using the continuous integral
-        min_val = onp.min([x for (x,y) in integral_pairs])
-        max_val = onp.max([x for (x,y) in integral_pairs])
+        min_val = np.min([x for (x,y) in integral_pairs])
+        max_val = np.max([x for (x,y) in integral_pairs])
         best_boundary = min_val
         best_acc = 0.5
-        for boundary in onp.linspace(min_val, max_val, 1000):
+        for boundary in np.linspace(min_val, max_val, 1000):
             acc = (len([x for (x,y) in integral_pairs if y == 1 and x > boundary]) + len([x for (x,y) in integral_pairs if y == 0 and x <= boundary])) / len(integral_pairs)
             if(acc >= best_acc):
                 best_acc = acc
@@ -350,9 +347,9 @@ class HeySnipsNetworkFORCE(BaseModel):
             if(batch_id*data_loader.batch_size > 1000):
                 break
         
-            filtered = onp.stack([s[0][1] for s in batch])
+            filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            tgt_signals = onp.stack([s[2] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
             batched_rate_output, batched_res_inputs, _ = self.get_data(filtered_batch=filtered)
 
             # - Evolve
@@ -367,21 +364,21 @@ class HeySnipsNetworkFORCE(BaseModel):
             for idx in range(batched_final_out.shape[0]):
 
                 # - Compute the integral for the points that lie above threshold0
-                integral_final_out = onp.array(batched_final_out[idx])
+                integral_final_out = np.array(batched_final_out[idx])
                 integral_final_out[integral_final_out < self.threshold0] = 0.0                                                                                                                                                                                                                              
                 for t,val in enumerate(integral_final_out):
                     if(val > 0.0):
                         integral_final_out[t] = val + integral_final_out[t-1]
 
                 predicted_label = 0
-                if(onp.max(integral_final_out) > self.best_boundary):
+                if(np.max(integral_final_out) > self.best_boundary):
                     predicted_label = 1
 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
 
                 predicted_rate_label = 0
-                if(onp.any(batched_rate_output[idx] > self.threshold)):
+                if(np.any(batched_rate_output[idx] > self.threshold)):
                     predicted_rate_label = 1
                 
                 if(predicted_rate_label == target_labels[idx]):
@@ -400,7 +397,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
 if __name__ == "__main__":
 
-    onp.random.seed(42)
+    np.random.seed(42)
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
@@ -441,9 +438,9 @@ if __name__ == "__main__":
                             one_hot=False,
                             cache_folder=None)
 
-    num_train_batches = int(onp.ceil(experiment.num_train_samples / batch_size))
-    num_val_batches = int(onp.ceil(experiment.num_val_samples / batch_size))
-    num_test_batches = int(onp.ceil(experiment.num_test_samples / batch_size))
+    num_train_batches = int(np.ceil(experiment.num_train_samples / batch_size))
+    num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
+    num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
     model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
                                 num_neurons=num,

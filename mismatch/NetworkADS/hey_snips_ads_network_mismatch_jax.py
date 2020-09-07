@@ -79,20 +79,12 @@ class HeySnipsNetworkADS(BaseModel):
         self.fs = fs
         self.dt = 0.001
         self.mismatch_std = mismatch_std
+        self.mismatch_gain = 1.0
 
         self.num_targets = len(labels)
-        self.test_acc_original = 0.0
-        self.test_acc_mismatch = 0.0
-        self.mean_mse_original = 0.0
-        self.mean_mse_mismatch = 0.0
-        self.average_power_error = 0.0
-        self.average_final_mse = 0.0
-        self.final_outs = []
-        self.targets = []
         self.use_batching = use_batching
         self.use_ebn = use_ebn
 
-        # self.base_path = "/home/julian_synsense_ai/RobustClassificationWithEBNs/mismatch"
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
@@ -142,23 +134,7 @@ class HeySnipsNetworkADS(BaseModel):
                 self.ads_layer_mismatch.weights_out = self.ads_layer_mismatch.weights_in.T
 
             if(self.use_ebn):
-                # - Scale down matrices since optimal EBN structure is affected by change in tau_mem and v_thresh
-                if(self.mismatch_std == 0.05):
-                    reduction=0.9
-                    self.ads_layer_mismatch.weights_fast *= reduction
-                    self.ads_layer_mismatch.weights_slow *= reduction
-                elif(self.mismatch_std == 0.2):
-                    reduction=0.5
-                    # lambda_d = 1/self.ads_layer.tau_mem[0]
-                    # Ti = (0.0001*lambda_d+0.0005*lambda_d)/2
-                    # Ti_new = (0.0001*1/self.ads_layer_mismatch.tau_mem + 0.0001*(1/self.ads_layer_mismatch.tau_mem)**2)/2
-                    # self.ads_layer_mismatch.weights_fast = np.divide(self.ads_layer_mismatch.weights_fast, Ti_new/Ti)
-                    self.ads_layer_mismatch.weights_fast *= reduction
-                    self.ads_layer_mismatch.weights_slow *= reduction
-                elif(self.mismatch_std == 0.3):
-                    reduction = 0.2
-                    self.ads_layer_mismatch.weights_fast *= reduction
-                    self.ads_layer_mismatch.weights_slow *= reduction
+                self.ads_layer_mismatch = self.apply_safe_scaling(self.ads_layer_mismatch)
 
             self.amplitude = 50 / self.tau_mem
 
@@ -177,11 +153,6 @@ class HeySnipsNetworkADS(BaseModel):
         return
 
     def get_data(self, filtered_batch):
-        """
-        :brief Evolves filtered audio samples in the batch through the rate network to obtain target dynamics
-        :params filtered_batch : Shape: [batch_size,T,num_channels], e.g. [100,5000,16]
-        :returns batched_spiking_net_input [batch_size,T,Nc], batched_rate_net_dynamics [batch_size,T,self.Nc], batched_rate_output [batch_size,T,N_out] [Batch size is always first dimensions]
-        """
         num_batches = filtered_batch.shape[0]
         T = filtered_batch.shape[1]
         time_base = np.arange(0,int(T * self.dt),self.dt)
@@ -198,11 +169,94 @@ class HeySnipsNetworkADS(BaseModel):
             batched_rate_net_dynamics[batch_id] = self.rate_layer.res_acts_last_evolution.samples
             # - Calculate the input to the spiking network
             batched_spiking_in[batch_id] = self.amplitude * (ts_filt(time_base) @ self.w_in)
-
         return (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output)
 
+    def apply_safe_scaling(self, layer):
+        # - Scale down matrices since optimal EBN structure is affected by change in tau_mem and v_thresh
+        if(self.mismatch_std == 0.05):
+            reduction=0.9
+            layer.weights_fast *= reduction
+            layer.weights_slow *= reduction
+        elif(self.mismatch_std == 0.2):
+            reduction=0.5
+            lambda_d = 1/self.ads_layer.tau_mem[0]
+            Ti = (0.0001*lambda_d+0.0005*lambda_d)/2
+            Ti_new = (0.0001*1/layer.tau_mem + 0.0001*(1/layer.tau_mem)**2)/2
+            layer.weights_fast = np.divide(layer.weights_fast, Ti_new/Ti)
+            # layer.weights_fast *= reduction
+            layer.weights_slow *= reduction
+        elif(self.mismatch_std == 0.3):
+            reduction = 0.2
+            layer.weights_fast *= reduction
+            layer.weights_slow *= reduction
+        return layer
+
+
+    def find_gain(self, target_labels, output_new):
+        gains = np.linspace(1.0,2.0,50)
+        best_gain=1.0; best_acc=0.5
+        for gain in gains:
+            correct = 0
+            for idx_b in range(output_new.shape[0]):
+                predicted_label = self.get_prediction(gain*output_new[idx_b])
+                if(target_labels[idx_b] == predicted_label):
+                    correct += 1
+            if(correct/len(target_labels) > best_acc):
+                best_acc=correct/len(target_labels)
+                best_gain=gain
+        print(f"MM {self.mismatch_std} gain {best_gain} val acc {best_acc} ")
+        return best_gain
+
     def perform_validation_set(self, data_loader, fn_metrics):
-        return
+        # - For the given network instance, simulate mismatch a couple of times on validation set
+        # - and find out best gain
+        num_trials = 5
+        num_samples = 100
+        bs = data_loader.batch_size
+
+        outputs_mismatch = np.zeros((num_samples*num_trials,5000,1))
+
+        true_labels = []
+
+        for trial in range(num_trials):
+            # - Sample new mismatch layer
+            ads_layer_mismatch = apply_mismatch(self.ads_layer, self.mismatch_std)
+            ads_layer_mismatch = self.apply_safe_scaling(ads_layer_mismatch)
+            
+            for batch_id, [batch, _] in enumerate(data_loader.val_set()):
+
+                if (batch_id * data_loader.batch_size >= num_samples):
+                    break
+
+                filtered = np.stack([s[0][1] for s in batch])
+                target_labels = [s[1] for s in batch]
+                tgt_signals = np.stack([s[2] for s in batch])
+                (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
+                spikes_ts, _, states_t_mismatch = vmap(ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(ads_layer_mismatch._pack(), False, batched_spiking_in)
+                batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1) @ self.w_out
+                idx_start = int(trial*num_samples)
+                outputs_mismatch[idx_start:int(idx_start+bs),:,:] = batched_output_mismatch
+                for bi in range(batched_output_mismatch.shape[0]):
+                    true_labels.append(target_labels[bi])
+
+                if(self.verbose > 0):
+                    target = tgt_signals[idx]
+                    plt.clf()
+                    plt.subplot(211)
+                    plt.plot(self.time_base, batched_output_mismatch[idx], label="Spiking mismatch")
+                    plt.plot(self.time_base, target, label="Target")
+                    plt.ylim([-0.5,1.0])
+                    plt.legend()
+                    plt.subplot(212)
+                    spikes_ind = np.nonzero(spikes_ts[idx])
+                    times = spikes_ind[0]
+                    channels = spikes_ind[1]
+                    plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
+                    plt.xlim([0.0,5.0])
+                    plt.draw()
+                    plt.pause(0.001)
+
+        self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
     def train(self, data_loader, fn_metrics):
         yield {"train_loss": 0.0}
@@ -220,20 +274,34 @@ class HeySnipsNetworkADS(BaseModel):
             predicted_label = 1
         return predicted_label
 
+    def get_mfr(self, spikes):
+        # - Mean firing rate of each neuron in Hz
+        return np.sum(spikes) / (768 * 5.0)
+
     def test(self, data_loader, fn_metrics):
 
-        correct = correct_mismatch = correct_rate = counter = sum_error_original = sum_error_mismatch = 0
-        power = []
-        mse = []
-        final_outs = []
-        targets = []
+        correct = correct_mismatch = correct_rate = counter = 0
+        
+        final_out_power_original = []
+        final_out_power_mismatch = []
 
-        for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
+        final_out_mse_original = []
+        final_out_mse_mismatch = []
+
+        mfr_original = []
+        mfr_mismatch = []
+
+        dynamics_power_original = []
+        dynamics_power_mismatch = []
+        
+        dynamics_mse_original = []
+        dynamics_mse_mismatch = []
+
+
+        for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
             if (batch_id * data_loader.batch_size >= 100):
                 break
-
-            confusion_matrix = np.zeros((2,2))
 
             # - Get input
             filtered = np.stack([s[0][1] for s in batch])
@@ -242,39 +310,34 @@ class HeySnipsNetworkADS(BaseModel):
             (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output) = self.get_data(filtered_batch=filtered)
 
             spikes_ts, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
-            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
-
             spikes_ts_mismatch, _, states_t_mismatch = vmap(self.ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_mismatch._pack(), False, batched_spiking_in)
+            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
             batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1)
-
 
             for idx in range(len(batch)):
 
-                # - Get the output
-                out_test = batched_output[idx]
-                out_test_mismatch = batched_output_mismatch[idx]
-
                 # - Compute the final output
-                final_out = 1.15 * out_test @ self.w_out
-                final_out_mismatch = out_test_mismatch @ self.w_out # - Gain to account for spike freq. adaptation or EBN
-                final_outs.append(final_out_mismatch)
-                targets.append(target_labels[idx])
+                final_out = batched_output[idx] @ self.w_out
+                final_out_mismatch = self.mismatch_gain * (batched_output_mismatch[idx] @ self.w_out) # - Gain to account for spike freq. adaptation or EBN
                 
-                error_power = np.var(final_out-final_out_mismatch)/np.var(final_out)
-                error_mse = np.mean((final_out-final_out_mismatch)**2)
-                power.append(error_power)
-                mse.append(error_mse)
+                final_out_power_original.append( np.var(final_out-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_mismatch.append( np.var(final_out_mismatch-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
 
+                final_out_mse_original.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
+                final_out_mse_mismatch.append( np.mean( (final_out_mismatch-batched_rate_output[idx])**2 ) )
+
+                mfr_original.append(self.get_mfr(np.array(spikes_ts[idx])))
+                mfr_mismatch.append(self.get_mfr(np.array(spikes_ts_mismatch[idx])))
+
+                dynamics_power_original.append( np.mean(np.var(batched_output[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_mismatch.append( np.mean(np.var(batched_output_mismatch[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+
+                dynamics_mse_original.append( np.mean(np.mean((batched_output[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_mismatch.append( np.mean(np.mean((batched_output_mismatch[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                
                 # - ..and filter
                 final_out = filter_1d(final_out, alpha=0.95)
-                final_out_mismatch = filter_1d(1.15*final_out_mismatch, alpha=0.95)
-
-                # - Compute MSE for dynamics
-                error_original = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test, axis=0))
-                error_mismatch = np.mean(np.linalg.norm(batched_rate_net_dynamics[idx]-out_test_mismatch, axis=0))
-
-                sum_error_original += error_original
-                sum_error_mismatch += error_mismatch
+                final_out_mismatch = filter_1d(final_out_mismatch, alpha=0.95)
 
                 # - Some plotting
                 if(self.verbose > 0):
@@ -318,12 +381,7 @@ class HeySnipsNetworkADS(BaseModel):
                     correct_rate += 1
                 counter += 1
 
-                confusion_matrix[predicted_label_mismatch,target_labels[idx]] += 1
-
-                # print("--------------------------------", flush=True)
-                # print("TESTING batch", batch_id, flush=True)
-                # print("Error:", error_power , "Mimsatch std:", self.mismatch_std, "true label", target_labels[idx], "Original", predicted_label, "Mismatch", predicted_label_mismatch, "Rate label", predicted_label_rate, flush=True)
-                # print("--------------------------------", flush=True)
+                print(f"MM std: {self.mismatch_std} true label {target_labels[idx]} rate label {predicted_label_rate} orig label {predicted_label} mm label {predicted_label_mismatch}")
 
             # - End batch for loop
         # - End testing loop
@@ -331,16 +389,19 @@ class HeySnipsNetworkADS(BaseModel):
         test_acc = correct / counter
         test_acc_mismatch = correct_mismatch / counter
         test_acc_rate = correct_rate / counter
-        print("Deviation error: %.3f Test accuracy: Full: %.4f Mismatch: %.4f  Rate: %.4f | Mean MSE Orig.: %.3f | Mean MSE MM.: %.3f" % (np.mean(power), test_acc, test_acc_mismatch, test_acc_rate, sum_error_original / counter, sum_error_mismatch / counter), flush=True)
-        print(confusion_matrix)
-        self.test_acc_original = test_acc
-        self.test_acc_mismatch = test_acc_mismatch
-        self.mean_mse_original = sum_error_original / counter
-        self.mean_mse_mismatch = sum_error_mismatch / counter
-        self.average_power_error = np.mean(power)
-        self.average_final_mse = np.mean(mse)
-        self.final_outs = final_outs
-        self.targets = targets
+        
+        out_dict = {}
+        # - NOTE Save rate accuracy at the last spot!
+        out_dict["test_acc"] = [test_acc,test_acc_mismatch,test_acc_rate]
+        out_dict["final_out_power"] = [np.mean(final_out_power_original),np.mean(final_out_power_mismatch)]
+        out_dict["final_out_mse"] = [np.mean(final_out_mse_original),np.mean(final_out_mse_mismatch)]
+        out_dict["mfr"] = [np.mean(mfr_original),np.mean(mfr_mismatch)]
+        out_dict["dynamics_power"] = [np.mean(dynamics_power_original),np.mean(dynamics_power_mismatch)]
+        out_dict["dynamics_mse"] = [np.mean(dynamics_mse_original),np.mean(dynamics_mse_mismatch)]
+
+        print(out_dict)
+        # - Save the out_dict in the field of the model (can then be accessed from outside using model.out_dict)
+        self.out_dict = out_dict
 
 
 if __name__ == "__main__":
@@ -367,27 +428,15 @@ if __name__ == "__main__":
     if(use_ebn):
         postfix += "_ebn"
 
-    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_test_accuracies.npy'
-    ads_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_test_accuracies_mismatch.npy'
-    ads_mse_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse.npy'
-    ads_mse_mismatch_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse_mismatch.npy'
-    ads_power_final_out_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_power_final_out.npy'
-    ads_mse_final_out_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{network_idx}ads_jax{postfix}_mse_final_out.npy'
+    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{network_idx}_jax{postfix}_mismatch_analysis_output.json'
 
-
-    if(os.path.exists(ads_orig_final_path) and os.path.exists(ads_mismatch_final_path) and os.path.exists(ads_mse_final_path) and os.path.exists(ads_mse_mismatch_final_path)):
+    if(os.path.exists(ads_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    mismatch_stds = [0.2, 0.3]
-    final_array_original = np.zeros((len(mismatch_stds), num_trials))
-    final_array_mismatch = np.zeros((len(mismatch_stds), num_trials))
-
-    final_array_mse_original = np.zeros((len(mismatch_stds), num_trials))
-    final_array_mse_mismatch = np.zeros((len(mismatch_stds), num_trials))
-
-    final_array_mse_final_out = np.zeros((len(mismatch_stds), num_trials))
-    final_array_power_final_out = np.zeros((len(mismatch_stds), num_trials))
+    mismatch_stds = [0.05, 0.2, 0.3]
+    
+    output_dict = {}
 
     batch_size = 100
     balance_ratio = 1.0
@@ -395,22 +444,14 @@ if __name__ == "__main__":
 
     for idx,mismatch_std in enumerate(mismatch_stds):
 
-        accuracies_original = []
-        accuracies_mismatch = []
+        # - Save output dicts of the trials
+        mm_output_dicts = []
+        mismatch_gain = 1.0
 
-        mse_original = []
-        mse_mismatch = []
-
-        mse_final_out = []
-        power_final_out = []
-
-        final_outs = []
-        targets = []
-
-        for _ in range(num_trials):
+        for trial_idx in range(num_trials):
 
             experiment = HeySnipsDEMAND(batch_size=batch_size,
-                                    percentage=0.1,
+                                    percentage=1.0,
                                     snr=snr,
                                     randomize_after_epoch=True,
                                     downsample=1000,
@@ -429,6 +470,15 @@ if __name__ == "__main__":
                                         use_batching=use_batching,
                                         use_ebn=use_ebn)
 
+            # - Save the mismatch gain computed from the model
+            if(trial_idx == 0):
+                model.perform_validation_set(experiment._data_loader, 0.0)
+                mismatch_gain = model.mismatch_gain
+
+            print(f"MM level: {mismatch_std} gain {mismatch_gain}")
+            # - Set the mismatch gain that was computed in the first trial
+            model.mismatch_gain = mismatch_gain
+
             experiment.set_model(model)
             experiment.set_config({'num_train_batches': num_train_batches,
                                 'num_val_batches': num_val_batches,
@@ -439,72 +489,16 @@ if __name__ == "__main__":
                                 'balance_ratio': balance_ratio})
             experiment.start()
 
-            accuracies_original.append(model.test_acc_original)
-            accuracies_mismatch.append(model.test_acc_mismatch)
+            mm_output_dicts.append(model.out_dict)
 
-            mse_original.append(model.mean_mse_original)
-            mse_mismatch.append(model.mean_mse_mismatch)
-
-            mse_final_out.append(model.average_final_mse)
-            power_final_out.append(model.average_power_error)
-
-            # - Remove
-            final_outs.append(model.final_outs)
-            targets.append(model.targets)
-
-        final_outs = [f for d in final_outs for f in d]
-        targets =  [f for d in targets for f in d]
-        # - Search for best gain
-        gains = np.linspace(1,2,100)
-        best_gain = 1.0
-        best_acc = 0.5
-        for idx_gain in range(len(gains)):
-            gain = gains[idx_gain]
-            correct = 0 ; counter = 0
-            for idx_fo,final_out in enumerate(final_outs):
-                tmp = filter_1d(gain*final_out, alpha=0.95)
-                prediction = model.get_prediction(tmp)
-                if(prediction == targets[idx_fo]):
-                    correct += 1
-                counter += 1
-            if(correct/counter > best_acc):
-                best_gain = gain
-                best_acc = correct/counter
-        print(f"Best gain is {best_gain} with acc. {best_acc}")
+        # - Save the out_dict list in the main dict under the current mismatch level
+        output_dict[str(mismatch_std)] = mm_output_dicts
 
 
-        final_array_original[idx,:] = np.array(accuracies_original)
-        final_array_mismatch[idx,:] = np.array(accuracies_mismatch)
+    print(output_dict['0.05'])
+    print(output_dict['0.2'])
+    print(output_dict['0.3'])
 
-        final_array_mse_original[idx,:] = np.array(mse_original)
-        final_array_mse_mismatch[idx,:] = np.array(mse_mismatch)
-
-        final_array_mse_final_out[idx,:] = np.array(mse_final_out)
-        final_array_power_final_out[idx,:] = np.array(power_final_out)
-
-    print(final_array_original)
-    print(final_array_mismatch)
-    print("----------------------------------")
-    print(final_array_mse_original)
-    print(final_array_mse_mismatch)
-    print("----------------------------------")
-    print(final_array_mse_final_out)
-    print(final_array_power_final_out)
-
-    with open(ads_orig_final_path, 'wb') as f:
-        np.save(f, final_array_original)
-
-    with open(ads_mismatch_final_path, 'wb') as f:
-        np.save(f, final_array_mismatch)
-
-    with open(ads_mse_final_path, 'wb') as f:
-        np.save(f, final_array_mse_original)
-
-    with open(ads_mse_mismatch_final_path, 'wb') as f:
-        np.save(f, final_array_mse_mismatch)
-
-    with open(ads_mse_final_out_final_path, 'wb') as f:
-        np.save(f, final_array_mse_final_out)
-    
-    with open(ads_power_final_out_final_path, 'wb') as f:
-        np.save(f, final_array_power_final_out)
+    # - Save
+    with open(ads_orig_final_path, 'w') as f:
+        json.dump(output_dict, f)

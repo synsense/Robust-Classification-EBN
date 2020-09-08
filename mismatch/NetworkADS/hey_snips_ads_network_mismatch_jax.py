@@ -239,23 +239,6 @@ class HeySnipsNetworkADS(BaseModel):
                 for bi in range(batched_output_mismatch.shape[0]):
                     true_labels.append(target_labels[bi])
 
-                if(self.verbose > 0):
-                    target = tgt_signals[idx]
-                    plt.clf()
-                    plt.subplot(211)
-                    plt.plot(self.time_base, batched_output_mismatch[idx], label="Spiking mismatch")
-                    plt.plot(self.time_base, target, label="Target")
-                    plt.ylim([-0.5,1.0])
-                    plt.legend()
-                    plt.subplot(212)
-                    spikes_ind = np.nonzero(spikes_ts[idx])
-                    times = spikes_ind[0]
-                    channels = spikes_ind[1]
-                    plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
-                    plt.xlim([0.0,5.0])
-                    plt.draw()
-                    plt.pause(0.001)
-
         self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
     def train(self, data_loader, fn_metrics):

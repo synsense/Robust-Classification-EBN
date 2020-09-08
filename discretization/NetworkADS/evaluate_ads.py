@@ -184,16 +184,19 @@ class HeySnipsNetworkADS(BaseModel):
 
         return (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output)
 
-    def find_gain(self, output_original, output_new):
-        gains = np.linspace(1.0,2.0,50)
-        best_gain=1.0; best_mse=np.inf
+    def find_gain(self, target_labels, output_new):
+        gains = np.linspace(0.5,5.5,150)
+        best_gain=1.0; best_acc=0.5
         for gain in gains:
-            mse = 0
-            for idx_b in range(output_original.shape[0]):
-                mse += np.mean( (output_original[idx_b]-gain*output_new[idx_b])**2 )
-            if(mse < best_mse):
-                best_mse=mse
+            correct = 0
+            for idx_b in range(output_new.shape[0]):
+                predicted_label = self.get_prediction(gain*output_new[idx_b])
+                if(target_labels[idx_b] == predicted_label):
+                    correct += 1
+            if(correct/len(target_labels) > best_acc):
+                best_acc=correct/len(target_labels)
                 best_gain=gain
+        print(f"gain {best_gain} val acc {best_acc} ")
         return best_gain
 
     # - Find the optimal gain for the networks' output
@@ -202,37 +205,40 @@ class HeySnipsNetworkADS(BaseModel):
         num_samples = 500
         bs = data_loader.batch_size
 
-        outputs_orig = np.zeros((num_samples,5000,1))
         outputs_4bit = np.zeros((num_samples,5000,1))
         outputs_5bit = np.zeros((num_samples,5000,1))
         outputs_6bit = np.zeros((num_samples,5000,1))
 
+        true_labels = []
+
         for batch_id, [batch, _] in enumerate(data_loader.val_set()):
 
-            # - Validation on 500 samples
+            # - Validation
             if (batch_id * data_loader.batch_size >= num_samples):
                 break
 
             filtered = np.stack([s[0][1] for s in batch])
+            target_labels = [s[1] for s in batch]
             (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
-            _, _, states_t = vmap(self.ads_layer._evolve_functional, in_axes=(None, None, 0))(self.ads_layer._pack(), False, batched_spiking_in)
             _, _, states_t_4bit = vmap(self.ads_layer_4bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_4bit._pack(), False, batched_spiking_in)
             _, _, states_t_5bit = vmap(self.ads_layer_5bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_5bit._pack(), False, batched_spiking_in)
             _, _, states_t_6bit = vmap(self.ads_layer_6bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_6bit._pack(), False, batched_spiking_in)
-            batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1) @ self.w_out
+            
             batched_output_4bit = np.squeeze(np.array(states_t_4bit["output_ts"]), axis=-1) @ self.w_out
             batched_output_5bit = np.squeeze(np.array(states_t_5bit["output_ts"]), axis=-1) @ self.w_out
             batched_output_6bit = np.squeeze(np.array(states_t_6bit["output_ts"]), axis=-1) @ self.w_out
 
-            outputs_orig[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output
             outputs_4bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_4bit
             outputs_5bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_5bit
             outputs_6bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_6bit
+            
+            for bi in range(batched_output_4bit.shape[0]):
+                true_labels.append(target_labels[bi])
         
         # - Find best gains
-        self.gain_4bit = self.find_gain(outputs_orig, outputs_4bit)
-        self.gain_5bit = self.find_gain(outputs_orig, outputs_5bit)
-        self.gain_6bit = self.find_gain(outputs_orig, outputs_6bit)
+        self.gain_4bit = self.find_gain(true_labels, outputs_4bit)
+        self.gain_5bit = self.find_gain(true_labels, outputs_5bit)
+        self.gain_6bit = self.find_gain(true_labels, outputs_6bit)
 
     # - Needed by SIMMBA base experiment
     def train(self, data_loader, fn_metrics):
@@ -291,7 +297,7 @@ class HeySnipsNetworkADS(BaseModel):
         dynamics_mse_6bit = []
 
 
-        for batch_id, [batch, test_logger] in enumerate(data_loader.test_set()):
+        for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
             # - Evaluate on 1000 samples in total
             if (batch_id * data_loader.batch_size >= 1000):
@@ -435,16 +441,14 @@ if __name__ == "__main__":
     parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
     parser.add_argument('--use-batching', default=False, action="store_true", help="Use the networks trained in batched mode")
     parser.add_argument('--use-ebn', default=False, action="store_true", help="Use the networks trained with EBNs")
-    parser.add_argument('--seed', default=42, type=int, help="Seed used in the simulation. Should correspond to network idx")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
     network_idx = args['network_idx']
     use_batching = args['use_batching']
     use_ebn = args['use_ebn']
-    seed = args['seed']
 
-    np.random.seed(seed)
+    np.random.seed(42)
 
     # - Use postifx for storing the data
     postfix = ""
@@ -470,12 +474,12 @@ if __name__ == "__main__":
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    batch_size = 1
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 
     experiment = HeySnipsDEMAND(batch_size=batch_size,
-                            percentage=0.1,
+                            percentage=1.0,
                             snr=snr,
                             randomize_after_epoch=True,
                             downsample=1000,
@@ -498,7 +502,7 @@ if __name__ == "__main__":
                         'num_val_batches': num_val_batches,
                         'num_test_batches': num_test_batches,
                         'batch size': batch_size,
-                        'percentage data': 0.1,
+                        'percentage data': 1.0,
                         'snr': snr,
                         'balance_ratio': balance_ratio})
     experiment.start()

@@ -1,7 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore')
 import ujson as json
-# import json
 import numpy as np
 from jax import vmap, jit
 import matplotlib
@@ -60,17 +59,17 @@ def apply_mismatch(net, std_p=0.2):
     net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, deepcopy(net.LIF_Readout)])
     return net_mismatch
 
-class HeySnipsNetworkADS(BaseModel):
+class HeySnipsBPTT(BaseModel):
     def __init__(self,
                  labels,
                  mismatch_std,
                  fs=16000.,
                  verbose=0,
                  network_idx="",
-                 name="Snips ADS",
+                 name="Snips BPTT",
                  version="1.0"):
         
-        super(HeySnipsNetworkADS, self).__init__(name,version)
+        super(HeySnipsBPTT, self).__init__(name,version)
 
         self.fs = fs
         self.verbose = verbose
@@ -314,7 +313,7 @@ if __name__ == "__main__":
             num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
             num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
-            model = HeySnipsNetworkADS(labels=experiment._data_loader.used_labels, mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
+            model = HeySnipsBPTT(labels=experiment._data_loader.used_labels, mismatch_std=mismatch_std, verbose=verbose, network_idx=network_idx)
 
             if(trial_idx == 0):
                 model.perform_validation_set(experiment._data_loader, 0.0)

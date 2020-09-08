@@ -33,7 +33,7 @@ architectures = ["reservoir","force", "bptt", "ads_jax_ebn"]
 label_architectures = ["Reservoir", "FORCE", "BPTT", "Network ADS"]
 keys = ["test_acc","final_out_power","final_out_mse","mfr","dynamics_power","dynamics_mse"]
 num_trials = 50
-networks = 6
+networks = 10
 
 # - Structure: {"0.05": [dict1,dict2,...,dict50], "0.2":[], "0.3":[]}
 def initialize_dict(use_fake):
@@ -54,7 +54,10 @@ for architecture in architectures:
     data_all_networks = initialize_dict(architecture != "ads_jax_ebn")
     for network_idx in range(networks):
         # - Load the dictionary
-        fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{str(network_idx)}{architecture}_mismatch_analysis_output.json"
+        fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{architecture}{str(network_idx)}_mismatch_analysis_output.json"
+        if(architecture == "ads_jax_ebn"):
+            fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{str(network_idx)}_jax_ebn_mismatch_analysis_output.json"
+        
         if(os.path.exists(fp)):
             with open(fp, 'r') as f:
                 tmp = json.load(f)

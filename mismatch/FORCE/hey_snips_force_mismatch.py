@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings('ignore')
 import ujson as json
 import numpy as np
-from jax import vmap, jit
+from jax import vmap
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
 matplotlib.rc('text')

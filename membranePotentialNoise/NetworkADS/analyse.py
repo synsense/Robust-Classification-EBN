@@ -325,7 +325,7 @@ if __name__ == "__main__":
     noise_stds_untransformed = [0.0, 0.01, 0.05, 0.1]
     # - These values then need to be transformed using x = noise_std * tau_mem / dt
     # - NOTE This assumes that the noise is injected as current which needs to be checked.
-    noise_stds = [5.0, 0.5, 2.5, 5.0]
+    noise_stds = [0.0, 0.5, 2.5, 5.0]
 
     for noise_idx,noise_std in enumerate(noise_stds):
 

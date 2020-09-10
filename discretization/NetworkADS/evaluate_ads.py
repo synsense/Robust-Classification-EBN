@@ -59,7 +59,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.gain_6bit = 1.0
 
         # - This repository contains the trained models in ../mismatch/Resources
-        self.base_path = "/home/julian/Documents/Robust-Classification-EBN/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         # - Load the rate network
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
@@ -470,7 +470,6 @@ if __name__ == "__main__":
     machine_specific_path = '/home/theiera' if os.uname().nodename=='iatturina' else '/home/julian'
     
     output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/{network_idx}ads_jax{postfix}_discretization_out.json'
-    print(output_final_path)
     
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

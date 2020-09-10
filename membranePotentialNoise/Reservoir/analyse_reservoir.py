@@ -40,8 +40,12 @@ class LSM(BaseModel):
             layers_ = []
             for lyr_conf in config_dict['layers']:
                 cls = getattr(layers, lyr_conf["class_name"])
-                lyr_conf.pop("class_name")
-                layers_.append(cls(**lyr_conf))
+                cn = lyr_conf.pop("class_name")
+                if(cn == "RecIAFSpkInNest"):
+                    self.noise_std = self.noise_std_orig * np.abs(np.abs(np.asarray(lyr_conf["v_thresh"]))-np.abs(np.asarray(lyr_conf["v_reset"]))) * np.asarray(lyr_conf["tau_mem"]) / lyr_conf["dt"] * 1000
+                    layers_.append(cls(noise_std=self.noise_std, **lyr_conf))
+                else:
+                    layers_.append(cls(**lyr_conf))
             self.lyr_filt, self.lyr_inp, self.lyr_res, self.lyr_out = layers_
 
             # - Compute transformed noise_std
@@ -100,7 +104,7 @@ class LSM(BaseModel):
         return best_gain
 
     def perform_validation_set(self, data_loader, fn_metrics):
-        num_batches = 2
+        num_batches = 500
         new_outputs = np.zeros((num_batches,5000,1))
         tgt_labels = []
 
@@ -128,7 +132,7 @@ class LSM(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if (batch_id*data_loader.batch_size >= 1):
+            if (batch_id*data_loader.batch_size >= 1000):
                 break
 
             batch = copy.deepcopy(list(batch))
@@ -148,6 +152,14 @@ class LSM(BaseModel):
             mfr.append(self.get_mfr(ts_spikes))
 
             predicted_label = self.get_prediction(final_out)
+
+            # plt.clf()
+            # tb = np.linspace(0.0,5.0,len(final_out))
+            # plt.plot(tb, final_out, label="Spiking")
+            # ts_target_signal.plot(label="Target")
+            # plt.ylim([-0.3,1.0])
+            # plt.draw()
+            # plt.pause(0.001)
 
             if(predicted_label == target_labels[0]):
                 correct += 1
@@ -193,7 +205,7 @@ if __name__ == "__main__":
     downsample = 200
     output_dict = {}
 
-    noise_stds = [0.0, 0.01, 0.05, 0.1]
+    noise_stds = [0.00, 0.01, 0.05, 0.1]
 
     for noise_idx,noise_std in enumerate(noise_stds):
 

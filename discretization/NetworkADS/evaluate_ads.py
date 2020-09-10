@@ -111,15 +111,12 @@ class HeySnipsNetworkADS(BaseModel):
             # - Apply discretization
             self.ads_layer_4bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 4)
             self.ads_layer_4bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 4)
-            assert(len(np.unique(self.ads_layer_4bit.weights_slow)) <= 16), "Something wrong with discretization"
 
             self.ads_layer_5bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 5)
             self.ads_layer_5bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 5)
-            assert(len(np.unique(self.ads_layer_5bit.weights_slow)) <= 32), "Something wrong with discretization"
 
             self.ads_layer_6bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 6)
             self.ads_layer_6bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 6)
-            assert(len(np.unique(self.ads_layer_6bit.weights_slow)) <= 64), "Something wrong with discretization"
 
             # - Avoid explosion of activity due to change in optimal EBN
             if(use_ebn):

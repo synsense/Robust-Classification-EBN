@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings('ignore')
 import ujson as json
 import numpy as np
-from jax import vmap
+from jax import vmap, jit
 import matplotlib
 matplotlib.rc('font', family='Times New Roman')
 matplotlib.rc('text')
@@ -15,51 +15,36 @@ from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from rockpool.timeseries import TSContinuous
 from rockpool import layers, Network
-from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, JaxFORCE
+from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, FFExpSynJax, RecLIFCurrentInJax_IO, FFLIFCurrentInJax_SO, FFExpSynCurrentInJax, RecLIFCurrentInJax_SO, RecLIFCurrentInJax
+from rockpool.networks import JaxStack
 import os
 import sys
 if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from copy import deepcopy
+from copy import copy, deepcopy
 
 
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
-
-class HeySnipsNetworkFORCE(BaseModel):
+class HeySnipsBPTT(BaseModel):
     def __init__(self,
-                 labels,
                  fs=16000.,
                  verbose=0,
                  network_idx="",
-                 name="Snips FORCE",
+                 name="Snips BPTT",
                  version="1.0"):
         
-        super(HeySnipsNetworkFORCE, self).__init__(name,version)
+        super(HeySnipsBPTT, self).__init__(name,version)
 
-        self.verbose = verbose
         self.fs = fs
+        self.verbose = verbose
         self.dt = 0.001
-
-        self.num_targets = len(labels)
+        self.time_base = np.arange(0, 5.0, self.dt)
+        self.threshold = 0.7
         self.out_dict = {}
+        
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
-        self.gain_4bit = 1.0
-        self.gain_5bit = 1.0
-        self.gain_6bit = 1.0
-
-        # - This repository contains the trained models in ../mismatch/Resources
-        if os.uname().nodename=='iatturina':
-            self.base_path = '/home/theiera/Documents/RobustClassificationWithEBNs/mismatch'
-        else:
-            self.base_path = '/home/julian/Documents/RobustClassificationWithEBNs/mismatch'
-
-        # - Load the rate network
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
             config = json.load(f)
@@ -69,10 +54,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.w_out = np.array(config['w_out'])
         self.bias = config['bias']
         self.tau_rate = config['tau']
-        self.N_out = self.w_out.shape[1]
-        self.time_base = np.arange(0.0, 5.0, self.dt)
 
-        # - Create the rate network from the loaded data
         self.rate_layer = RecRateEulerJax_IO(w_in=self.w_in,
                                              w_recurrent=self.w_rec,
                                              w_out=self.w_out,
@@ -82,44 +64,38 @@ class HeySnipsNetworkFORCE(BaseModel):
                                              dt=self.dt,
                                              noise_std=0.0,
                                              name="hidden")
+
+        self.N_out = self.w_out.shape[1]
+        self.num_units = self.w_rec.shape[0]
         self.rate_layer.reset_state()
         self.lr_params = self.rate_layer._pack()
         self.lr_state = self.rate_layer._state
 
-        # - Depending on what method we are using and the network-idx, load the corresponding network
-        network_name = f"Resources/force{network_idx}.json"
-        self.model_path_force_layer = os.path.join(self.base_path, network_name)
-
-        if(os.path.exists(self.model_path_force_layer)):
-            print("Loading network...")
-
-            self.force_layer = self.load_net(self.model_path_force_layer)
-            self.tau_mem = self.force_layer.tau_mem[0]
-            self.Nc = self.force_layer.w_in.shape[0]
-            
-            # - Create copies of the later and discretize the weights
-            self.force_layer_4bit = self.init_force_layer(4)
-            self.force_layer_5bit = self.init_force_layer(5)
-            self.force_layer_6bit = self.init_force_layer(6)
-
+        # - Create spiking net
+        model_path_bptt_net = os.path.join(self.base_path, f"Resources/bptt{network_idx}.json")
+        if(os.path.exists(model_path_bptt_net)):
+            self.net = self.load_net(model_path_bptt_net)
+            self.net_4bits = self.init_bptt_layer(4)
+            self.net_5bits = self.init_bptt_layer(5)
+            self.net_6bits = self.init_bptt_layer(6)
+            print("Loaded pretrained network")
         else:
-            # - File was not found so throw an exception
-            assert(False), "Some network file was not found"
+            assert(False), "Could not find network"
 
-    def init_force_layer(self, bits):
-        fl = JaxFORCE(w_in=self.force_layer.w_in,
-                        w_rec=self.discretize(self.force_layer.w_rec, bits),
-                        w_out=self.force_layer.w_out,
-                        E=self.force_layer.E,
-                        dt=self.force_layer.dt,
-                        alpha=self.force_layer.alpha,
-                        v_thresh=self.force_layer.v_thresh,
-                        v_reset=self.force_layer.v_reset,
-                        t_ref=self.force_layer.t_ref,
-                        bias=self.force_layer.bias,
-                        tau_mem=self.force_layer.tau_mem,
-                        tau_syn=self.force_layer.tau_syn)
-        return fl
+    def init_bptt_layer(self, bits):
+
+        lyrLIFRecurrent_discretized = RecLIFCurrentInJax_SO(
+            w_recurrent = self.discretize(self.net.LIF_Reservoir.weights, bits),
+            tau_mem = self.net.LIF_Reservoir.tau_mem,
+            tau_syn = self.net.LIF_Reservoir.tau_syn,
+            bias = self.net.LIF_Reservoir.bias,
+            noise_std = 0.0,
+            dt = self.net.LIF_Reservoir.dt,
+            name = 'LIF_Reservoir',
+        )
+        net = JaxStack([deepcopy(self.net.LIF_Input), lyrLIFRecurrent_discretized, deepcopy(self.net.LIF_Readout)])
+        return net
+
 
     def load_net(self, fn):
         with open(fn, "r") as f:
@@ -127,7 +103,8 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.threshold0 = loaddict.pop("threshold0")
         self.best_val_acc = loaddict.pop("best_val_acc")
         self.best_boundary = loaddict.pop("best_boundary")
-        return JaxFORCE.load_from_dict(loaddict)
+        net = Network.load_from_dict(loaddict)
+        return JaxStack([l for l in net.evol_order])
 
     def save(self, fn):
         return
@@ -145,10 +122,8 @@ class HeySnipsNetworkFORCE(BaseModel):
         :param np.ndarray filtered_batch: Shape: [batch_size,T,num_channels], e.g. [100,5000,16]
         :returns np.ndarray batched_rate_output: Shape: [batch_size,T,N_out] [Batch size is always first dimensions]
         """
-        batched_rate_output, _, states_t = vmap(self.rate_layer._evolve_functional, in_axes=(None, None, 0))(self.lr_params, self.lr_state, filtered_batch)
-        batched_res_inputs = states_t["res_inputs"]
-        batched_res_acts = states_t["res_acts"]
-        return batched_res_inputs, batched_res_acts, batched_rate_output
+        batched_rate_output, _, _ = vmap(self.rate_layer._evolve_functional, in_axes=(None, None, 0))(self.lr_params, self.lr_state, filtered_batch)
+        return batched_rate_output
 
     def find_gain(self, target_labels, output_new):
         gains = np.linspace(0.5,5.5,100)
@@ -184,15 +159,9 @@ class HeySnipsNetworkFORCE(BaseModel):
 
             filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
-
-            _, _, states_t_4bit = vmap(self.force_layer_4bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_4bit._pack(), False, batched_spiking_in)
-            _, _, states_t_5bit = vmap(self.force_layer_5bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_5bit._pack(), False, batched_spiking_in)
-            _, _, states_t_6bit = vmap(self.force_layer_6bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_6bit._pack(), False, batched_spiking_in)
-            
-            batched_output_4bit = np.squeeze(np.array(states_t_4bit["output_ts"]), axis=-1) @ self.w_out
-            batched_output_5bit = np.squeeze(np.array(states_t_5bit["output_ts"]), axis=-1) @ self.w_out
-            batched_output_6bit = np.squeeze(np.array(states_t_6bit["output_ts"]), axis=-1) @ self.w_out
+            batched_output_4bit, _, _ = vmap(self.net_4bits._evolve_functional, in_axes=(None, None, 0))(self.net_4bits._pack(), self.net_4bits._state, filtered)
+            batched_output_5bit, _, _ = vmap(self.net_5bits._evolve_functional, in_axes=(None, None, 0))(self.net_5bits._pack(), self.net_5bits._state, filtered)
+            batched_output_6bit, _, _ = vmap(self.net_6bits._evolve_functional, in_axes=(None, None, 0))(self.net_6bits._pack(), self.net_6bits._state, filtered)
 
             outputs_4bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_4bit
             outputs_5bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_5bit
@@ -233,35 +202,12 @@ class HeySnipsNetworkFORCE(BaseModel):
     # - Main part. Here we evaluate on the samples
     def test(self, data_loader, fn_metrics):
 
-        correct = correct_4bit = correct_5bit = correct_6bit = correct_rate = counter = 0
-        # - Store power of difference of the final output for each bit level
-        final_out_power = []
-        final_out_power_4bit = []
-        final_out_power_5bit = []
-        final_out_power_6bit = []
-        # - Store mse of the final output for each bit level
+        correct = correct_4bit = correct_5bit = correct_6bit = counter = 0
+
         final_out_mse = []
         final_out_mse_4bit = []
         final_out_mse_5bit = []
         final_out_mse_6bit = []
-
-        # - Store mean firing rates (tricky for BPTT because of surrogate spikes. Need to use spiking layer as a replacement.)
-        mfr = []
-        mfr_4bit = []
-        mfr_5bit = []
-        mfr_6bit = []
-
-        # - Only for this architecture and FORCE: Store the MSE and power of difference for the reconstructed dynamics
-        dynamics_power = []
-        dynamics_power_4bit = []
-        dynamics_power_5bit = []
-        dynamics_power_6bit = []
-        
-        dynamics_mse = []
-        dynamics_mse_4bit = []
-        dynamics_mse_5bit = []
-        dynamics_mse_6bit = []
-
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
@@ -270,49 +216,24 @@ class HeySnipsNetworkFORCE(BaseModel):
 
             filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
-            batched_spiking_in, batched_rate_net_dynamics, batched_rate_output = self.get_data(filtered_batch=filtered)
+            tgt_signals = np.stack([s[2] for s in batch])
 
-            spikes_ts, _, states_ts = vmap(self.force_layer._evolve_functional, in_axes=(None, None, 0))(self.force_layer._pack(), False, batched_spiking_in)
-            spikes_ts_4bit, _, states_ts_4bit = vmap(self.force_layer_4bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_4bit._pack(), False, batched_spiking_in)
-            spikes_ts_5bit, _, states_ts_5bit = vmap(self.force_layer_5bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_5bit._pack(), False, batched_spiking_in)
-            spikes_ts_6bit, _, states_ts_6bit = vmap(self.force_layer_6bit._evolve_functional, in_axes=(None, None, 0))(self.force_layer_6bit._pack(), False, batched_spiking_in)
-            
-            batched_output = np.squeeze(np.array(states_ts["output_ts"]), axis=-1)
-            batched_output_4bit = np.squeeze(np.array(states_ts_4bit["output_ts"]), axis=-1)
-            batched_output_5bit = np.squeeze(np.array(states_ts_5bit["output_ts"]), axis=-1)
-            batched_output_6bit = np.squeeze(np.array(states_ts_6bit["output_ts"]), axis=-1)
+            batched_output, _, _ = vmap(self.net._evolve_functional, in_axes=(None, None, 0))(self.net._pack(), self.net._state, filtered)
+            batched_output_4bit, _, _ = vmap(self.net_4bits._evolve_functional, in_axes=(None, None, 0))(self.net_4bits._pack(), self.net_4bits._state, filtered)
+            batched_output_5bit, _, _ = vmap(self.net_5bits._evolve_functional, in_axes=(None, None, 0))(self.net_5bits._pack(), self.net_5bits._state, filtered)
+            batched_output_6bit, _, _ = vmap(self.net_6bits._evolve_functional, in_axes=(None, None, 0))(self.net_6bits._pack(), self.net_6bits._state, filtered)
 
             for idx in range(len(batch)):
 
-                final_out = batched_output[idx] @ self.w_out
-                final_out_4bit = self.gain_4bit * (batched_output_4bit[idx] @ self.w_out)
-                final_out_5bit = self.gain_5bit * (batched_output_5bit[idx] @ self.w_out)
-                final_out_6bit = self.gain_6bit * (batched_output_6bit[idx] @ self.w_out)
+                final_out = batched_output[idx]
+                final_out_4bit = self.gain_4bit * batched_output_4bit[idx]
+                final_out_5bit = self.gain_5bit * batched_output_5bit[idx]
+                final_out_6bit = self.gain_6bit * batched_output_6bit[idx]
 
-                final_out_power.append( np.var(final_out-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
-                final_out_power_4bit.append( np.var(final_out_4bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
-                final_out_power_5bit.append( np.var(final_out_5bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
-                final_out_power_6bit.append( np.var(final_out_6bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
-
-                final_out_mse.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
-                final_out_mse_4bit.append( np.mean( (final_out_4bit-batched_rate_output[idx])**2 ) )
-                final_out_mse_5bit.append( np.mean( (final_out_5bit-batched_rate_output[idx])**2 ) )
-                final_out_mse_6bit.append( np.mean( (final_out_6bit-batched_rate_output[idx])**2 ) )
-
-                mfr.append(self.get_mfr(np.array(spikes_ts[idx])))
-                mfr_4bit.append(self.get_mfr(np.array(spikes_ts_4bit[idx])))
-                mfr_5bit.append(self.get_mfr(np.array(spikes_ts_5bit[idx])))
-                mfr_6bit.append(self.get_mfr(np.array(spikes_ts_6bit[idx])))
-
-                dynamics_power.append( np.mean(np.var(batched_output[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
-                dynamics_power_4bit.append( np.mean(np.var(batched_output_4bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
-                dynamics_power_5bit.append( np.mean(np.var(batched_output_5bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
-                dynamics_power_6bit.append( np.mean(np.var(batched_output_6bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
-
-                dynamics_mse.append( np.mean(np.mean((batched_output[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
-                dynamics_mse_4bit.append( np.mean(np.mean((batched_output_4bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
-                dynamics_mse_5bit.append( np.mean(np.mean((batched_output_5bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
-                dynamics_mse_6bit.append( np.mean(np.mean((batched_output_6bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                final_out_mse.append( np.mean( (final_out-tgt_signals[idx])**2 ) )
+                final_out_mse_4bit.append( np.mean( (final_out_4bit-tgt_signals[idx])**2 ) )
+                final_out_mse_5bit.append( np.mean( (final_out_5bit-tgt_signals[idx])**2 ) )
+                final_out_mse_6bit.append( np.mean( (final_out_6bit-tgt_signals[idx])**2 ) )
  
                 # - Some plotting
                 if(self.verbose > 0):
@@ -321,7 +242,6 @@ class HeySnipsNetworkFORCE(BaseModel):
                     plt.plot(self.time_base, final_out_4bit, label="4bit")
                     plt.plot(self.time_base, final_out_5bit, label="5bit")
                     plt.plot(self.time_base, final_out_6bit, label="6bit")
-                    plt.plot(self.time_base, batched_rate_output[idx], label="Rate")
                     plt.legend()
                     plt.ylim([-0.5,1.0])
                     plt.draw()
@@ -333,10 +253,6 @@ class HeySnipsNetworkFORCE(BaseModel):
                 predicted_label_4bit = self.get_prediction(final_out_4bit)
                 predicted_label_5bit = self.get_prediction(final_out_5bit)
                 predicted_label_6bit = self.get_prediction(final_out_6bit)
-                
-                predicted_label_rate = 0
-                if((batched_rate_output[idx] > 0.7).any()):
-                    predicted_label_rate = 1
 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
@@ -346,8 +262,6 @@ class HeySnipsNetworkFORCE(BaseModel):
                     correct_5bit += 1
                 if(predicted_label_6bit == target_labels[idx]):
                     correct_6bit += 1
-                if(predicted_label_rate == target_labels[idx]):
-                    correct_rate += 1
                 counter += 1
 
                 print(f"True label {target_labels[idx]} Full {predicted_label} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
@@ -359,17 +273,12 @@ class HeySnipsNetworkFORCE(BaseModel):
         test_acc_4bit = correct_4bit / counter
         test_acc_5bit = correct_5bit / counter
         test_acc_6bit = correct_6bit / counter
-        test_acc_rate = correct_rate / counter
         print(f"Test accuracy: Full: {test_acc} 4bit: {test_acc_4bit} 5bit: {test_acc_5bit} 6bit: {test_acc_6bit}")
 
         out_dict = {}
         # - NOTE Save rate accuracy at the last spot!
-        out_dict["test_acc"] = [test_acc,test_acc_4bit,test_acc_5bit,test_acc_6bit,test_acc_rate]
-        out_dict["final_out_power"] = [np.mean(final_out_power).item(),np.mean(final_out_power_4bit).item(),np.mean(final_out_power_5bit).item(),np.mean(final_out_power_6bit).item()]
+        out_dict["test_acc"] = [test_acc,test_acc_4bit,test_acc_5bit,test_acc_6bit]
         out_dict["final_out_mse"] = [np.mean(final_out_mse).item(),np.mean(final_out_mse_4bit).item(),np.mean(final_out_mse_5bit).item(),np.mean(final_out_mse_6bit).item()]
-        out_dict["mfr"] = [np.mean(mfr).item(),np.mean(mfr_4bit).item(),np.mean(mfr_5bit).item(),np.mean(mfr_6bit).item()]
-        out_dict["dynamics_power"] = [np.mean(dynamics_power).item(),np.mean(dynamics_power_4bit).item(),np.mean(dynamics_power_5bit).item(),np.mean(dynamics_power_6bit).item()]
-        out_dict["dynamics_mse"] = [np.mean(dynamics_mse).item(),np.mean(dynamics_mse_4bit).item(),np.mean(dynamics_mse_5bit).item(),np.mean(dynamics_mse_6bit).item()]
 
         print(out_dict)
         # - Save the out_dict in the field of the model (can then be accessed from outside using model.out_dict)
@@ -390,14 +299,14 @@ if __name__ == "__main__":
 
     machine_specific_path = '/home/theiera' if os.uname().nodename=='iatturina' else '/home/julian'
     
-    output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/force{network_idx}_discretization_out.json'
+    output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
     
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    batch_size = 100
+    batch_size = 1
     balance_ratio = 1.0
     snr = 10.
 
@@ -414,9 +323,8 @@ if __name__ == "__main__":
     num_val_batches = int(np.ceil(experiment.num_val_samples / batch_size))
     num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
-    model = HeySnipsNetworkFORCE(labels=experiment._data_loader.used_labels,
-                                verbose=verbose,
-                                network_idx=network_idx)
+    model = HeySnipsBPTT(verbose=verbose,
+                        network_idx=network_idx)
 
     experiment.set_model(model)
     experiment.set_config({'num_train_batches': num_train_batches,

@@ -470,7 +470,6 @@ if __name__ == "__main__":
     machine_specific_path = '/home/theiera' if os.uname().nodename=='iatturina' else '/home/julian'
     
     output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/{network_idx}ads_jax{postfix}_discretization_out.json'
-    print(output_final_path)
     
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

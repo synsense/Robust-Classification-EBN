@@ -59,7 +59,7 @@ class HeySnipsNetworkADS(BaseModel):
         self.gain_6bit = 1.0
 
         # - This repository contains the trained models in ../mismatch/Resources
-        self.base_path = "/home/julian/Documents/Robust-Classification-EBN/mismatch"
+        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
         # - Load the rate network
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")

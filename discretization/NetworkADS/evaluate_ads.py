@@ -22,15 +22,16 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from Utils import filter_1d
 from copy import deepcopy
 
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
+def filter_1d(data, alpha = 0.9):
+    last = data[0]
+    out = np.zeros((len(data),))
+    out[0] = last
+    for i in range(1,len(data)):
+        out[i] = alpha*out[i-1] + (1-alpha)*data[i]
+        last = data[i]
+    return out
 
 class HeySnipsNetworkADS(BaseModel):
     def __init__(self,
@@ -433,9 +434,9 @@ class HeySnipsNetworkADS(BaseModel):
 if __name__ == "__main__":
 
     # - Arguments needed for bash script
-    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser = argparse.ArgumentParser(description='Discretization analysis of ADS Network')
+    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
+    parser.add_argument('--network-idx', default="", type=str, help="Network index to be analysed")
     parser.add_argument('--use-batching', default=False, action="store_true", help="Use the networks trained in batched mode")
     parser.add_argument('--use-ebn', default=False, action="store_true", help="Use the networks trained with EBNs")
 

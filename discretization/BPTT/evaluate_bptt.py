@@ -13,9 +13,8 @@ matplotlib.rcParams['figure.figsize'] = [15, 10]
 import matplotlib.pyplot as plt
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
-from rockpool.timeseries import TSContinuous
 from rockpool import layers, Network
-from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, FFExpSynJax, RecLIFCurrentInJax_IO, FFLIFCurrentInJax_SO, FFExpSynCurrentInJax, RecLIFCurrentInJax_SO, RecLIFCurrentInJax
+from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, RecLIFCurrentInJax_SO
 from rockpool.networks import JaxStack
 import os
 import sys
@@ -23,7 +22,7 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from copy import copy, deepcopy
+from copy import deepcopy
 
 
 class HeySnipsBPTT(BaseModel):
@@ -287,9 +286,9 @@ class HeySnipsBPTT(BaseModel):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser = argparse.ArgumentParser(description='Discretization analysis of BPTT network')
+    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']
@@ -306,7 +305,7 @@ if __name__ == "__main__":
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    batch_size = 1
+    batch_size = 100
     balance_ratio = 1.0
     snr = 10.
 

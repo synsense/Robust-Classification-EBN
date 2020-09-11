@@ -242,8 +242,8 @@ class LSM(BaseModel):
 if __name__ == "__main__":
 
     # - Arguments needed for bash script
-    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser = argparse.ArgumentParser(description='Discretization analysis for reservoir network')
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())
     network_idx = args['network_idx']

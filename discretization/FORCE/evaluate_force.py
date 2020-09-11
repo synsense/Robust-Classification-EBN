@@ -378,9 +378,9 @@ class HeySnipsNetworkFORCE(BaseModel):
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
-    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser = argparse.ArgumentParser(description='Discretization analysis of FORCE network')
+    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']

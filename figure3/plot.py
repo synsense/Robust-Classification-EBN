@@ -70,7 +70,7 @@ with open(os.path.join(load_base_path,'spike_channels_ina.npy'), 'rb') as f:
 t_start = 0.0
 t_stop = 2.0
 t_start_suppress = 0.9
-t_stop_suppress = 1.5
+t_stop_suppress = 1.3
 
 
 fig = plt.figure(figsize=(7.14,3.91),constrained_layout=True)

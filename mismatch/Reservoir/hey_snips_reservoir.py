@@ -9,7 +9,6 @@ from matplotlib import pyplot as plt
 from SIMMBA.BaseModel import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from SIMMBA import BatchResult
-from SIMMBA.metrics import roc
 from sklearn import metrics
 from rockpool import layers
 import os
@@ -18,11 +17,6 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
 
 class LSM(BaseModel):
     def __init__(self,

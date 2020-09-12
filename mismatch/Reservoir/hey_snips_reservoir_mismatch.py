@@ -14,11 +14,6 @@ if not sys.warnoptions:
     warnings.simplefilter("ignore")
 import argparse
 
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
 class LSM(BaseModel):
     def __init__(self,
                 downsample:int,
@@ -264,7 +259,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())
     num_trials = args['num_trials']

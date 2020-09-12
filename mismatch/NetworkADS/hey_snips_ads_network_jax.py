@@ -18,13 +18,6 @@ import argparse
 from Utils import filter_1d, k_step_function
 from copy import copy
 
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
-
 class HeySnipsNetworkADS(BaseModel):
     def __init__(self,
                  labels,
@@ -567,7 +560,7 @@ if __name__ == "__main__":
     parser.add_argument('--num-val', default=500, type=int, help="Number of validation samples")
     parser.add_argument('--num-test', default=1000, type=int, help="Number of test samples")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be trained")
     parser.add_argument('--seed', default=42, type=int, help="Random seed")
     parser.add_argument('--use-batching', default=False, action='store_true', help="Use batching")
     parser.add_argument('--use-ebn', default=False, action='store_true', help="Use EBN connections")

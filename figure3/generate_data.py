@@ -111,12 +111,17 @@ class HeySnipsNetworkADS(BaseModel):
             self.ads_layer_disc.weights_slow = self.discretize(self.ads_layer.weights_slow, 4)
             self.ads_layer_ina = deepcopy(self.ads_layer)
             self.ads_layer_ina.noise_std = 2.5 # - Corresponds to std 0.05
-            self.ads_layer_ina.weights_fast *= 0.8
-            self.ads_layer_ina.weights_slow *= 0.8
+            self.ads_layer_ina.weights_fast *= 0.7
+            self.ads_layer_ina.weights_slow *= 0.7
             self.ads_layer_failure = deepcopy(self.ads_layer)
-            self.ads_layer_failure.t_start_suppress = 0.9
-            self.ads_layer_failure.t_stop_suppress = 1.5
-            self.ads_layer_failure.percentage_suppress = 0.4
+
+            self.t_start_suppress = 0.9
+            self.t_stop_suppress = 1.3
+            self.percentage_suppress = 0.4
+
+            self.ads_layer_failure.t_start_suppress = self.t_start_suppress
+            self.ads_layer_failure.t_stop_suppress = self.t_stop_suppress
+            self.ads_layer_failure.percentage_suppress = self.percentage_suppress
 
             lambda_d = 1/self.ads_layer.tau_mem[0]
             Ti = (0.0001*lambda_d+0.0005*lambda_d)/2
@@ -232,16 +237,21 @@ class HeySnipsNetworkADS(BaseModel):
                 # - Compute the final output
                 final_out = batched_output[idx] @ self.w_out
                 final_out_mm = batched_output_mm[idx] @ self.w_out
-                final_out_disc = 2*batched_output_disc[idx] @ self.w_out
-                final_out_failure = 1.5*batched_output_failure[idx] @ self.w_out
-                final_out_ina = 1.0*batched_output_ina[idx] @ self.w_out
+                final_out_disc = batched_output_disc[idx] @ self.w_out
+                final_out_failure = batched_output_failure[idx] @ self.w_out
+
+                # final_out_failure[(self.time_base > self.t_start_suppress) & (self.time_base < self.t_stop_suppress)] *= 1/self.percentage_suppress
+
+
+                final_out_ina = batched_output_ina[idx] @ self.w_out
                                 
                 # - ..and filter
                 final_out = filter_1d(final_out, alpha=0.95)
                 final_out_mm = filter_1d(final_out_mm, alpha=0.95)
-                final_out_disc = filter_1d(final_out_disc, alpha=0.95)
+                final_out_disc = 2 * filter_1d(final_out_disc, alpha=0.95)
                 final_out_failure = filter_1d(final_out_failure, alpha=0.95)
-                final_out_ina = filter_1d(final_out_ina, alpha=0.95)
+                final_out_failure[(self.time_base > self.t_start_suppress) & (self.time_base < self.t_stop_suppress)] *= 1.66
+                final_out_ina = 1.8 * filter_1d(final_out_ina, alpha=0.95)
 
                 predicted_label = self.get_prediction(final_out)
                 predicted_label_mm = self.get_prediction(final_out_mm)
@@ -262,8 +272,7 @@ class HeySnipsNetworkADS(BaseModel):
                     plt.plot(self.time_base, batched_rate_output[idx], label="Rate")
                     plt.ylim([-0.5,1.0])
                     plt.legend()
-                    plt.draw()
-                    plt.pause(0.001)
+                    plt.show()
 
                 if(predicted_label_mm == predicted_label == predicted_label_disc == predicted_label_failure == predicted_label_ina == target_labels[idx] == 1 and not already_saved):
                     already_saved = True

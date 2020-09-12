@@ -1,5 +1,3 @@
-# - Execute this script using $ python figure1.py --num 384 --tau-slow 0.1 --tau-out 0.1 --epochs 5 --samples-per-epoch 1000 --eta 0.0001 --num-val 100 --num-test 50 --verbose 1
-
 import warnings
 warnings.filterwarnings('ignore')
 import ujson as json
@@ -22,14 +20,8 @@ if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from Utils import filter_1d, generate_xor_sample, k_step_function
+from Utils import filter_1d, generate_xor_sample
 from jax import vmap
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
 
 class TemporalXORNetwork:
     def __init__(self):
@@ -185,11 +177,9 @@ class TemporalXORNetwork:
             plt.draw()
             plt.pause(0.001)
 
-            print("--------------------------------",flush=True)
             print("TESTING batch", batch_id,flush=True)
             print("true label", tgt_label, "pred label", predicted_label, "Rate label", predicted_label_rate,flush=True)
             print("--------------------------------",flush=True)
-
 
 if __name__ == "__main__":
 

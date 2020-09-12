@@ -13,9 +13,8 @@ matplotlib.rcParams['figure.figsize'] = [15, 10]
 import matplotlib.pyplot as plt
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
-from rockpool.timeseries import TSContinuous
 from rockpool import layers, Network
-from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, JaxFORCE
+from rockpool.layers import H_tanh, RecRateEulerJax_IO, JaxFORCE
 import os
 import sys
 if not sys.warnoptions:
@@ -311,9 +310,9 @@ if __name__ == "__main__":
     np.random.seed(42)
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
-    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
+    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials that this experiment is repeated for every mismatch_std")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())
     verbose = args['verbose']

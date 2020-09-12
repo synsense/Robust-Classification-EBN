@@ -1,6 +1,5 @@
 import warnings
 warnings.filterwarnings('ignore')
-# import json
 import ujson as json
 import numpy as onp
 import jax.numpy as jnp
@@ -479,7 +478,7 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=20, type=int, help="Number of training epochs")
     parser.add_argument('--threshold', default=0.7, type=float, help="Threshold for prediction")
     parser.add_argument('--percentage-data', default=0.1, type=float, help="Percentage of total training data used. Example: 0.02 is 2%.")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--network-idx', default="", type=str, help="Network index for instance")
     parser.add_argument('--seed', default=42, type=int, help="Random seed")
 
 

@@ -15,22 +15,23 @@ from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from rockpool.timeseries import TSContinuous
 from rockpool import layers
-from rockpool.layers import ButterMelFilter, RecRateEulerJax_IO, H_tanh, JaxADS
+from rockpool.layers import RecRateEulerJax_IO, H_tanh, JaxADS
 import os
 import sys
 if not sys.warnoptions:
     import warnings
     warnings.simplefilter("ignore")
 import argparse
-from Utils import filter_1d
 from copy import deepcopy
 
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
+def filter_1d(data, alpha = 0.9):
+    last = data[0]
+    out = np.zeros((len(data),))
+    out[0] = last
+    for i in range(1,len(data)):
+        out[i] = alpha*out[i-1] + (1-alpha)*data[i]
+        last = data[i]
+    return out
 
 class HeySnipsNetworkADS(BaseModel):
     def __init__(self,

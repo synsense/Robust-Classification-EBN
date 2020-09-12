@@ -25,13 +25,6 @@ import argparse
 from Utils import filter_1d
 from copy import deepcopy
 
-
-# - Change current directory to directory where this file is located
-absolute_path = os.path.abspath(__file__)
-directory_name = os.path.dirname(absolute_path)
-os.chdir(directory_name)
-
-
 def apply_mismatch(ads_layer, mismatch_std=0.2, beta=0.0):
     N = ads_layer.weights_slow.shape[0]
     new_tau_slow = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_syn_r_slow) + np.mean(ads_layer.tau_syn_r_slow))
@@ -394,7 +387,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
-    parser.add_argument('--network-idx', default="", type=str, help="Network idx for G-Cloud")
+    parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
     parser.add_argument('--use-batching', default=False, action="store_true", help="Use the networks trained in batched mode")
     parser.add_argument('--use-ebn', default=False, action="store_true", help="Use the networks trained with EBNs")
 

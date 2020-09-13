@@ -30,7 +30,8 @@ class LSM(BaseModel):
         self.gain_6bit = 1.0
 
         # - Create network
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -250,7 +251,8 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    output_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+    home = os.path.expanduser('~')
+    output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

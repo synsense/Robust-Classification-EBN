@@ -41,6 +41,9 @@ class HeySnipsBPTT(BaseModel):
         self.time_base = np.arange(0, 5.0, self.dt)
         self.threshold = 0.7
         self.out_dict = {}
+        self.gain_4bit = 1.0
+        self.gain_5bit = 1.0
+        self.gain_6bit = 1.0
         
         self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
 
@@ -92,7 +95,11 @@ class HeySnipsBPTT(BaseModel):
             dt = self.net.LIF_Reservoir.dt,
             name = 'LIF_Reservoir',
         )
-        net = JaxStack([deepcopy(self.net.LIF_Input), lyrLIFRecurrent_discretized, deepcopy(self.net.LIF_Readout)])
+        input_layer = deepcopy(self.net.LIF_Input)
+        output_layer = deepcopy(self.net.LIF_Readout)
+        input_layer.w_in = self.discretize(input_layer.w_in, bits)
+        output_layer.weights = self.discretize(output_layer.weights, bits)
+        net = JaxStack([input_layer, lyrLIFRecurrent_discretized, output_layer])
         return net
 
 

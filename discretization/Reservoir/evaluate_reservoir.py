@@ -18,6 +18,7 @@ import argparse
 class LSM(BaseModel):
     def __init__(self,
                 downsample:int,
+                verbose:int,
                 network_idx="",
                 name="ReservoirSnips",
                 version="0.1"):
@@ -28,6 +29,7 @@ class LSM(BaseModel):
         self.gain_4bit = 1.0
         self.gain_5bit = 1.0
         self.gain_6bit = 1.0
+        self.verbose = verbose
 
         # - Create network
         self.base_path = "/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization"
@@ -69,8 +71,10 @@ class LSM(BaseModel):
         lyr_filt_discretized, lyr_inp_discretized, lyr_res_discretized, lyr_out_discretized = layers_discretized
         
         # - Discretize lyr_res according to number of bits
+        lyr_inp_discretized.weights = self.discretize(lyr_inp_discretized.weights, bits)
         lyr_res_discretized.weights_rec = self.discretize(lyr_res_discretized.weights_rec, bits)
-        
+        lyr_out_discretized.weights = self.discretize(lyr_out_discretized.weights, bits)
+
         return lyr_filt_discretized, lyr_inp_discretized, lyr_res_discretized, lyr_out_discretized
 
     def get_prediction(self, final_out):
@@ -222,6 +226,18 @@ class LSM(BaseModel):
 
             print(f"True label {target_labels[0]} Full {predicted_label} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
 
+            if(self.verbose > 0):
+                tb = np.linspace(0.0,5.0,len(final_out))
+                plt.clf()
+                plt.plot(tb, final_out, label="Normal")
+                plt.plot(tb, final_out_4bits, label="4bits")
+                plt.plot(tb, final_out_5bits, label="5bits")
+                plt.plot(tb, final_out_6bits, label="6bits")
+                plt.legend()
+                plt.ylim([-0.3,1.0])
+                plt.draw()
+                plt.pause(0.001)
+
         # - End testing loop
 
         test_acc = correct / counter
@@ -244,9 +260,11 @@ if __name__ == "__main__":
     # - Arguments needed for bash script
     parser = argparse.ArgumentParser(description='Discretization analysis for reservoir network')
     parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
+    parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
 
     args = vars(parser.parse_args())
     network_idx = args['network_idx']
+    verbose = args['verbose']
 
     np.random.seed(42)
 
@@ -276,6 +294,7 @@ if __name__ == "__main__":
     num_test_batches = int(np.ceil(experiment.num_test_samples / batch_size))
 
     model = LSM(downsample=downsample,
+                verbose=verbose,
                 network_idx=network_idx)
 
     experiment.set_model(model)

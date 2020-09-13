@@ -105,10 +105,10 @@ class HeySnipsNetworkFORCE(BaseModel):
             assert(False), "Some network file was not found"
 
     def init_force_layer(self, bits):
-        fl = JaxFORCE(w_in=self.force_layer.w_in,
+        fl = JaxFORCE(w_in=self.discretize(self.force_layer.w_in, bits),
                         w_rec=self.discretize(self.force_layer.w_rec, bits),
-                        w_out=self.force_layer.w_out,
-                        E=self.force_layer.E,
+                        w_out=self.discretize(self.force_layer.w_out, bits),
+                        E=self.discretize(self.force_layer.E,bits),
                         dt=self.force_layer.dt,
                         alpha=self.force_layer.alpha,
                         v_thresh=self.force_layer.v_thresh,

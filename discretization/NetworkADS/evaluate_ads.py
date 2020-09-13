@@ -110,14 +110,9 @@ class HeySnipsNetworkADS(BaseModel):
             self.ads_layer_6bit = deepcopy(self.ads_layer)
 
             # - Apply discretization
-            self.ads_layer_4bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 4)
-            self.ads_layer_4bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 4)
-
-            self.ads_layer_5bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 5)
-            self.ads_layer_5bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 5)
-
-            self.ads_layer_6bit.weights_slow = self.discretize(self.ads_layer.weights_slow, 6)
-            self.ads_layer_6bit.weights_fast = self.discretize(self.ads_layer.weights_fast, 6)
+            self.ads_layer_4bit = self.apply_discretization(self.ads_layer_4bit, 4)
+            self.ads_layer_5bit = self.apply_discretization(self.ads_layer_5bit, 5)
+            self.ads_layer_6bit = self.apply_discretization(self.ads_layer_6bit, 6)
 
             # - Avoid explosion of activity due to change in optimal EBN
             if(use_ebn):
@@ -131,6 +126,13 @@ class HeySnipsNetworkADS(BaseModel):
         else:
             # - File was not found so throw an exception
             assert(False), "Some network file was not found"
+
+    def apply_discretization(self, layer, bits):
+        layer.weights_slow = self.discretize(layer.weights_slow, bits)
+        layer.weight_fast = self.discretize(layer.weights_fast, bits)
+        layer.weights_in = self.discretize(layer.weights_in, bits)
+        layer.weights_out = self.discretize(layer.weights_out, bits)
+        return layer
 
     # - Helper function for loading the network. This is not the same for all architectures.
     # - Loads threshold0 and best_boundary. These are parameters that were identified during the validation process.

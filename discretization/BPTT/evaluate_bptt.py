@@ -45,7 +45,8 @@ class HeySnipsBPTT(BaseModel):
         self.gain_5bit = 1.0
         self.gain_6bit = 1.0
         
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch'
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -303,9 +304,9 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    machine_specific_path = '/home/theiera' if os.uname().nodename=='iatturina' else '/home/julian'
+    home = os.path.expanduser('~')
     
-    output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
+    output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
     
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

@@ -32,7 +32,12 @@ class LSM(BaseModel):
         self.verbose = verbose
 
         # - Create network
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+<<<<<<< HEAD
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
+=======
+        self.base_path = "/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization"
+>>>>>>> b0302cd5bf034ae3c4bc28c8906288543d4f647e
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -268,7 +273,12 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-    output_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+<<<<<<< HEAD
+    home = os.path.expanduser('~')
+    output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+=======
+    output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+>>>>>>> b0302cd5bf034ae3c4bc28c8906288543d4f647e
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

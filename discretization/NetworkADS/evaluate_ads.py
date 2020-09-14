@@ -55,6 +55,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.use_ebn = use_ebn
         self.out_dict = {}
 
+        self.gain_2bit = 1.0
+        self.gain_3bit = 1.0
         self.gain_4bit = 1.0
         self.gain_5bit = 1.0
         self.gain_6bit = 1.0
@@ -105,17 +107,25 @@ class HeySnipsNetworkADS(BaseModel):
                 self.ads_layer.weights_out = self.ads_layer.weights_in.T
             
             # - Create copies of the later and discretize the weights
+            self.ads_layer_2bit = deepcopy(self.ads_layer)
+            self.ads_layer_3bit = deepcopy(self.ads_layer)
             self.ads_layer_4bit = deepcopy(self.ads_layer)
             self.ads_layer_5bit = deepcopy(self.ads_layer)
             self.ads_layer_6bit = deepcopy(self.ads_layer)
 
             # - Apply discretization
+            self.ads_layer_2bit = self.apply_discretization(self.ads_layer_2bit, 2)
+            self.ads_layer_3bit = self.apply_discretization(self.ads_layer_3bit, 3)
             self.ads_layer_4bit = self.apply_discretization(self.ads_layer_4bit, 4)
             self.ads_layer_5bit = self.apply_discretization(self.ads_layer_5bit, 5)
             self.ads_layer_6bit = self.apply_discretization(self.ads_layer_6bit, 6)
 
             # - Avoid explosion of activity due to change in optimal EBN
             if(use_ebn):
+                self.ads_layer_2bit.weights_slow *= 0.7
+                self.ads_layer_2bit.weights_fast *= 0.7
+                self.ads_layer_3bit.weights_slow *= 0.7
+                self.ads_layer_3bit.weights_fast *= 0.7
                 self.ads_layer_4bit.weights_slow *= 0.7
                 self.ads_layer_4bit.weights_fast *= 0.7
                 self.ads_layer_5bit.weights_slow *= 0.8
@@ -205,6 +215,8 @@ class HeySnipsNetworkADS(BaseModel):
         num_samples = 500
         bs = data_loader.batch_size
 
+        outputs_2bit = np.zeros((num_samples,5000,1))
+        outputs_3bit = np.zeros((num_samples,5000,1))
         outputs_4bit = np.zeros((num_samples,5000,1))
         outputs_5bit = np.zeros((num_samples,5000,1))
         outputs_6bit = np.zeros((num_samples,5000,1))
@@ -220,14 +232,20 @@ class HeySnipsNetworkADS(BaseModel):
             filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
             (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
+            _, _, states_t_2bit = vmap(self.ads_layer_2bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_2bit._pack(), False, batched_spiking_in)
+            _, _, states_t_3bit = vmap(self.ads_layer_3bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_3bit._pack(), False, batched_spiking_in)
             _, _, states_t_4bit = vmap(self.ads_layer_4bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_4bit._pack(), False, batched_spiking_in)
             _, _, states_t_5bit = vmap(self.ads_layer_5bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_5bit._pack(), False, batched_spiking_in)
             _, _, states_t_6bit = vmap(self.ads_layer_6bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_6bit._pack(), False, batched_spiking_in)
             
+            batched_output_2bit = np.squeeze(np.array(states_t_2bit["output_ts"]), axis=-1) @ self.w_out
+            batched_output_3bit = np.squeeze(np.array(states_t_3bit["output_ts"]), axis=-1) @ self.w_out
             batched_output_4bit = np.squeeze(np.array(states_t_4bit["output_ts"]), axis=-1) @ self.w_out
             batched_output_5bit = np.squeeze(np.array(states_t_5bit["output_ts"]), axis=-1) @ self.w_out
             batched_output_6bit = np.squeeze(np.array(states_t_6bit["output_ts"]), axis=-1) @ self.w_out
 
+            outputs_2bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_2bit
+            outputs_3bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_3bit
             outputs_4bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_4bit
             outputs_5bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_5bit
             outputs_6bit[int(batch_id*bs):int(batch_id*bs+bs),:,:] = batched_output_6bit
@@ -236,6 +254,8 @@ class HeySnipsNetworkADS(BaseModel):
                 true_labels.append(target_labels[bi])
         
         # - Find best gains
+        self.gain_2bit = self.find_gain(true_labels, outputs_2bit)
+        self.gain_3bit = self.find_gain(true_labels, outputs_3bit)
         self.gain_4bit = self.find_gain(true_labels, outputs_4bit)
         self.gain_5bit = self.find_gain(true_labels, outputs_5bit)
         self.gain_6bit = self.find_gain(true_labels, outputs_6bit)
@@ -267,31 +287,41 @@ class HeySnipsNetworkADS(BaseModel):
     # - Main part. Here we evaluate on the samples
     def test(self, data_loader, fn_metrics):
 
-        correct = correct_4bit = correct_5bit = correct_6bit = correct_rate = counter = 0
+        correct = correct_2bit = correct_3bit = correct_4bit = correct_5bit = correct_6bit = correct_rate = counter = 0
         # - Store power of difference of the final output for each bit level
         final_out_power = []
+        final_out_power_2bit = []
+        final_out_power_3bit = []
         final_out_power_4bit = []
         final_out_power_5bit = []
         final_out_power_6bit = []
         # - Store mse of the final output for each bit level
         final_out_mse = []
+        final_out_mse_2bit = []
+        final_out_mse_3bit = []
         final_out_mse_4bit = []
         final_out_mse_5bit = []
         final_out_mse_6bit = []
 
         # - Store mean firing rates (tricky for BPTT because of surrogate spikes. Need to use spiking layer as a replacement.)
         mfr = []
+        mfr_2bit = []
+        mfr_3bit = []
         mfr_4bit = []
         mfr_5bit = []
         mfr_6bit = []
 
         # - Only for this architecture and FORCE: Store the MSE and power of difference for the reconstructed dynamics
         dynamics_power = []
+        dynamics_power_2bit = []
+        dynamics_power_3bit = []
         dynamics_power_4bit = []
         dynamics_power_5bit = []
         dynamics_power_6bit = []
         
         dynamics_mse = []
+        dynamics_mse_2bit = []
+        dynamics_mse_3bit = []
         dynamics_mse_4bit = []
         dynamics_mse_5bit = []
         dynamics_mse_6bit = []
@@ -317,6 +347,12 @@ class HeySnipsNetworkADS(BaseModel):
             batched_output = np.squeeze(np.array(states_t["output_ts"]), axis=-1)
 
             # - Repeat for the discretized instances
+            spikes_ts_2bit, _, states_t_2bit = vmap(self.ads_layer_2bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_2bit._pack(), False, batched_spiking_in)
+            batched_output_2bit = np.squeeze(np.array(states_t_2bit["output_ts"]), axis=-1)
+
+            spikes_ts_3bit, _, states_t_3bit = vmap(self.ads_layer_3bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_3bit._pack(), False, batched_spiking_in)
+            batched_output_3bit = np.squeeze(np.array(states_t_3bit["output_ts"]), axis=-1)
+
             spikes_ts_4bit, _, states_t_4bit = vmap(self.ads_layer_4bit._evolve_functional, in_axes=(None, None, 0))(self.ads_layer_4bit._pack(), False, batched_spiking_in)
             batched_output_4bit = np.squeeze(np.array(states_t_4bit["output_ts"]), axis=-1)
 
@@ -330,6 +366,8 @@ class HeySnipsNetworkADS(BaseModel):
 
                 # - Compute the final output using the output weights of the rate network (only applies to FORCE and ADS)
                 final_out = batched_output[idx] @ self.w_out
+                final_out_2bit = self.gain_2bit * (batched_output_2bit[idx] @ self.w_out)
+                final_out_3bit = self.gain_3bit * (batched_output_3bit[idx] @ self.w_out)
                 final_out_4bit = self.gain_4bit * (batched_output_4bit[idx] @ self.w_out)
                 final_out_5bit = self.gain_5bit * (batched_output_5bit[idx] @ self.w_out)
                 final_out_6bit = self.gain_6bit * (batched_output_6bit[idx] @ self.w_out)
@@ -338,35 +376,47 @@ class HeySnipsNetworkADS(BaseModel):
                 # - For the final output: Compute the difference to the rate output for ADS and FORCE since these algorithms were trained for this task
                 # - NOTE For BPTT and reservoir, use the target signal here stored in tgt_signals with shape (batch size, time steps, 1)
                 final_out_power.append( np.var(final_out-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_2bit.append( np.var(final_out_2bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
+                final_out_power_3bit.append( np.var(final_out_3bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
                 final_out_power_4bit.append( np.var(final_out_4bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
                 final_out_power_5bit.append( np.var(final_out_5bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
                 final_out_power_6bit.append( np.var(final_out_6bit-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
                 # - Do the same, but using MSE
                 final_out_mse.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
+                final_out_mse_2bit.append( np.mean( (final_out_2bit-batched_rate_output[idx])**2 ) )
+                final_out_mse_3bit.append( np.mean( (final_out_3bit-batched_rate_output[idx])**2 ) )
                 final_out_mse_4bit.append( np.mean( (final_out_4bit-batched_rate_output[idx])**2 ) )
                 final_out_mse_5bit.append( np.mean( (final_out_5bit-batched_rate_output[idx])**2 ) )
                 final_out_mse_6bit.append( np.mean( (final_out_6bit-batched_rate_output[idx])**2 ) )
 
                 # - Store mean firing rates (tricky for BPTT because of surrogate spikes. Need to use spiking layer as a replacement.)
                 mfr.append(self.get_mfr(np.array(spikes_ts[idx])))
+                mfr_2bit.append(self.get_mfr(np.array(spikes_ts_2bit[idx])))
+                mfr_3bit.append(self.get_mfr(np.array(spikes_ts_3bit[idx])))
                 mfr_4bit.append(self.get_mfr(np.array(spikes_ts_4bit[idx])))
                 mfr_5bit.append(self.get_mfr(np.array(spikes_ts_5bit[idx])))
                 mfr_6bit.append(self.get_mfr(np.array(spikes_ts_6bit[idx])))
 
                 # - Only for this architecture and FORCE: Store the MSE and power of difference for the reconstructed dynamics
                 dynamics_power.append( np.mean(np.var(batched_output[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_2bit.append( np.mean(np.var(batched_output_2bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
+                dynamics_power_3bit.append( np.mean(np.var(batched_output_3bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
                 dynamics_power_4bit.append( np.mean(np.var(batched_output_4bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
                 dynamics_power_5bit.append( np.mean(np.var(batched_output_5bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
                 dynamics_power_6bit.append( np.mean(np.var(batched_output_6bit[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
 
                 # - Shape: (Num timesteps,Nc). Compute along 0-axis to get (Nc,) shaped vector and take mean again 
                 dynamics_mse.append( np.mean(np.mean((batched_output[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_2bit.append( np.mean(np.mean((batched_output_2bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
+                dynamics_mse_3bit.append( np.mean(np.mean((batched_output_3bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
                 dynamics_mse_4bit.append( np.mean(np.mean((batched_output_4bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
                 dynamics_mse_5bit.append( np.mean(np.mean((batched_output_5bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
                 dynamics_mse_6bit.append( np.mean(np.mean((batched_output_6bit[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
 
                 # - ..and filter
                 final_out = filter_1d(final_out, alpha=0.95)
+                final_out_2bit = filter_1d(final_out_2bit, alpha=0.95)
+                final_out_3bit = filter_1d(final_out_3bit, alpha=0.95)
                 final_out_4bit = filter_1d(final_out_4bit, alpha=0.95)
                 final_out_5bit = filter_1d(final_out_5bit, alpha=0.95)
                 final_out_6bit = filter_1d(final_out_6bit, alpha=0.95)
@@ -375,6 +425,8 @@ class HeySnipsNetworkADS(BaseModel):
                 if(self.verbose > 0):
                     plt.clf()
                     plt.plot(self.time_base, final_out, label="Full")
+                    plt.plot(self.time_base, final_out_2bit, label="2bit")
+                    plt.plot(self.time_base, final_out_3bit, label="3bit")
                     plt.plot(self.time_base, final_out_4bit, label="4bit")
                     plt.plot(self.time_base, final_out_5bit, label="5bit")
                     plt.plot(self.time_base, final_out_6bit, label="6bit")
@@ -387,6 +439,8 @@ class HeySnipsNetworkADS(BaseModel):
 
                 # - Get the predictions
                 predicted_label = self.get_prediction(final_out)
+                predicted_label_2bit = self.get_prediction(final_out_2bit)
+                predicted_label_3bit = self.get_prediction(final_out_3bit)
                 predicted_label_4bit = self.get_prediction(final_out_4bit)
                 predicted_label_5bit = self.get_prediction(final_out_5bit)
                 predicted_label_6bit = self.get_prediction(final_out_6bit)
@@ -397,6 +451,10 @@ class HeySnipsNetworkADS(BaseModel):
 
                 if(predicted_label == target_labels[idx]):
                     correct += 1
+                if(predicted_label_2bit == target_labels[idx]):
+                    correct_2bit += 1
+                if(predicted_label_3bit == target_labels[idx]):
+                    correct_3bit += 1
                 if(predicted_label_4bit == target_labels[idx]):
                     correct_4bit += 1
                 if(predicted_label_5bit == target_labels[idx]):
@@ -407,26 +465,28 @@ class HeySnipsNetworkADS(BaseModel):
                     correct_rate += 1
                 counter += 1
 
-                print(f"True label {target_labels[idx]} Full {predicted_label} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
+                print(f"True label {target_labels[idx]} Full {predicted_label} 2Bit {predicted_label_2bit} 3Bit {predicted_label_3bit} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
 
             # - End batch for loop
         # - End testing loop
 
         test_acc = correct / counter
+        test_acc_2bit = correct_2bit / counter
+        test_acc_3bit = correct_3bit / counter
         test_acc_4bit = correct_4bit / counter
         test_acc_5bit = correct_5bit / counter
         test_acc_6bit = correct_6bit / counter
         test_acc_rate = correct_rate / counter
-        print(f"Test accuracy: Full: {test_acc} 4bit: {test_acc_4bit} 5bit: {test_acc_5bit} 6bit: {test_acc_6bit}")
+        print(f"Test accuracy: Full: {test_acc} 2bit: {test_acc_2bit} 3bit: {test_acc_3bit} 4bit: {test_acc_4bit} 5bit: {test_acc_5bit} 6bit: {test_acc_6bit}")
 
         out_dict = {}
         # - NOTE Save rate accuracy at the last spot!
-        out_dict["test_acc"] = [test_acc,test_acc_4bit,test_acc_5bit,test_acc_6bit,test_acc_rate]
-        out_dict["final_out_power"] = [np.mean(final_out_power),np.mean(final_out_power_4bit),np.mean(final_out_power_5bit),np.mean(final_out_power_6bit)]
-        out_dict["final_out_mse"] = [np.mean(final_out_mse),np.mean(final_out_mse_4bit),np.mean(final_out_mse_5bit),np.mean(final_out_mse_6bit)]
-        out_dict["mfr"] = [np.mean(mfr),np.mean(mfr_4bit),np.mean(mfr_5bit),np.mean(mfr_6bit)]
-        out_dict["dynamics_power"] = [np.mean(dynamics_power),np.mean(dynamics_power_4bit),np.mean(dynamics_power_5bit),np.mean(dynamics_power_6bit)]
-        out_dict["dynamics_mse"] = [np.mean(dynamics_mse),np.mean(dynamics_mse_4bit),np.mean(dynamics_mse_5bit),np.mean(dynamics_mse_6bit)]
+        out_dict["test_acc"] = [test_acc,test_acc_2bit,test_acc_3bit,test_acc_4bit,test_acc_5bit,test_acc_6bit,test_acc_rate]
+        out_dict["final_out_power"] = [np.mean(final_out_power),np.mean(final_out_power_2bit),np.mean(final_out_power_3bit),np.mean(final_out_power_4bit),np.mean(final_out_power_5bit),np.mean(final_out_power_6bit)]
+        out_dict["final_out_mse"] = [np.mean(final_out_mse),np.mean(final_out_mse_2bit),np.mean(final_out_mse_3bit),np.mean(final_out_mse_4bit),np.mean(final_out_mse_5bit),np.mean(final_out_mse_6bit)]
+        out_dict["mfr"] = [np.mean(mfr),np.mean(mfr_2bit),np.mean(mfr_3bit),np.mean(mfr_4bit),np.mean(mfr_5bit),np.mean(mfr_6bit)]
+        out_dict["dynamics_power"] = [np.mean(dynamics_power),np.mean(dynamics_power_2bit),np.mean(dynamics_power_3bit),np.mean(dynamics_power_4bit),np.mean(dynamics_power_5bit),np.mean(dynamics_power_6bit)]
+        out_dict["dynamics_mse"] = [np.mean(dynamics_mse),np.mean(dynamics_mse_2bit),np.mean(dynamics_mse_3bit),np.mean(dynamics_mse_4bit),np.mean(dynamics_mse_5bit),np.mean(dynamics_mse_6bit)]
 
         print(out_dict)
         # - Save the out_dict in the field of the model (can then be accessed from outside using model.out_dict)

@@ -26,18 +26,16 @@ class LSM(BaseModel):
         super(LSM, self).__init__(name, version)
 
         self.downsample = downsample 
+        self.gain_2bit = 1.0
+        self.gain_3bit = 1.0
         self.gain_4bit = 1.0
         self.gain_5bit = 1.0
         self.gain_6bit = 1.0
         self.verbose = verbose
 
         # - Create network
-<<<<<<< HEAD
         home = os.path.expanduser('~')
         self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
-=======
-        self.base_path = "/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization"
->>>>>>> b0302cd5bf034ae3c4bc28c8906288543d4f647e
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -51,6 +49,8 @@ class LSM(BaseModel):
                 layers_.append(cls(**lyr_conf))
 
             self.lyr_filt, self.lyr_inp, self.lyr_res, self.lyr_out = layers_
+            self.lyr_filt_2bits, self.lyr_inp_2bits, self.lyr_res_2bits, self.lyr_out_2bits = self.get_discretized_network(2)
+            self.lyr_filt_3bits, self.lyr_inp_3bits, self.lyr_res_3bits, self.lyr_out_3bits = self.get_discretized_network(3)
             self.lyr_filt_4bits, self.lyr_inp_4bits, self.lyr_res_4bits, self.lyr_out_4bits = self.get_discretized_network(4)
             self.lyr_filt_5bits, self.lyr_inp_5bits, self.lyr_res_5bits, self.lyr_out_5bits = self.get_discretized_network(5)
             self.lyr_filt_6bits, self.lyr_inp_6bits, self.lyr_res_6bits, self.lyr_out_6bits = self.get_discretized_network(6)
@@ -115,11 +115,13 @@ class LSM(BaseModel):
     def predict(self, ts_batch, augment_with_white_noise=0.0, dataset='train'):
 
         ts_out, ts_res = self.predict_single(ts_batch, self.lyr_filt, self.lyr_inp, self.lyr_res, self.lyr_out)
+        ts_out_2bits, ts_res_2bits = self.predict_single(ts_batch, self.lyr_filt_2bits, self.lyr_inp_2bits, self.lyr_res_2bits, self.lyr_out_2bits)
+        ts_out_3bits, ts_res_3bits = self.predict_single(ts_batch, self.lyr_filt_3bits, self.lyr_inp_3bits, self.lyr_res_3bits, self.lyr_out_3bits)
         ts_out_4bits, ts_res_4bits = self.predict_single(ts_batch, self.lyr_filt_4bits, self.lyr_inp_4bits, self.lyr_res_4bits, self.lyr_out_4bits)
         ts_out_5bits, ts_res_5bits = self.predict_single(ts_batch, self.lyr_filt_5bits, self.lyr_inp_5bits, self.lyr_res_5bits, self.lyr_out_5bits)
         ts_out_6bits, ts_res_6bits = self.predict_single(ts_batch, self.lyr_filt_6bits, self.lyr_inp_6bits, self.lyr_res_6bits, self.lyr_out_6bits)
 
-        return ts_out.samples, ts_out_4bits.samples, ts_out_5bits.samples, ts_out_6bits.samples, ts_res, ts_res_4bits, ts_res_5bits, ts_res_6bits
+        return ts_out.samples, ts_out_2bits.samples, ts_out_3bits.samples, ts_out_4bits.samples, ts_out_5bits.samples, ts_out_6bits.samples, ts_res, ts_res_2bits, ts_res_3bits, ts_res_4bits, ts_res_5bits, ts_res_6bits
 
     def find_gain(self, target_labels, output_new):
         gains = np.linspace(0.5,5.5,100)
@@ -138,6 +140,8 @@ class LSM(BaseModel):
 
     def perform_validation_set(self, data_loader, fn_metrics):
         num_batches = 500
+        new_outputs_2bits = np.zeros((num_batches,5000,1))
+        new_outputs_3bits = np.zeros((num_batches,5000,1))
         new_outputs_4bits = np.zeros((num_batches,5000,1))
         new_outputs_5bits = np.zeros((num_batches,5000,1))
         new_outputs_6bits = np.zeros((num_batches,5000,1))
@@ -153,14 +157,18 @@ class LSM(BaseModel):
             samples = np.vstack([s[0][1] for s in batch])
             times_filt = np.arange(0, len(samples) / self.downsample, 1/self.downsample)
             ts_batch = TSContinuous(times_filt[:len(samples)], samples[:len(times_filt)])
-            _, final_out_4bits, final_out_5bits, final_out_6bits, _, _, _, _ = self.predict(ts_batch)
+            _, final_out_2bits, final_out_3bits, final_out_4bits, final_out_5bits, final_out_6bits, _, _, _, _, _, _ = self.predict(ts_batch)
 
+            new_outputs_2bits[batch_id,:final_out_2bits.shape[0],:] = final_out_2bits
+            new_outputs_3bits[batch_id,:final_out_3bits.shape[0],:] = final_out_3bits
             new_outputs_4bits[batch_id,:final_out_4bits.shape[0],:] = final_out_4bits
             new_outputs_5bits[batch_id,:final_out_5bits.shape[0],:] = final_out_5bits
             new_outputs_6bits[batch_id,:final_out_6bits.shape[0],:] = final_out_6bits
             
             tgt_labels.append(target_labels[0])
-                       
+
+        self.gain_2bit = self.find_gain(tgt_labels, new_outputs_2bits)
+        self.gain_3bit = self.find_gain(tgt_labels, new_outputs_3bits)               
         self.gain_4bit = self.find_gain(tgt_labels, new_outputs_4bits)
         self.gain_5bit = self.find_gain(tgt_labels, new_outputs_5bits)
         self.gain_6bit = self.find_gain(tgt_labels, new_outputs_6bits)
@@ -171,14 +179,18 @@ class LSM(BaseModel):
 
     def test(self, data_loader, fn_metrics):
 
-        correct = correct_4bit = correct_5bit = correct_6bit = counter = 0
+        correct = correct_2bit = correct_3bit = correct_4bit = correct_5bit = correct_6bit = counter = 0
         
         final_out_mse = []
+        final_out_mse_2bit = []
+        final_out_mse_3bit = []
         final_out_mse_4bit = []
         final_out_mse_5bit = []
         final_out_mse_6bit = []
 
         mfr = []
+        mfr_2bit = []
+        mfr_3bit = []
         mfr_4bit = []
         mfr_5bit = []
         mfr_6bit = []
@@ -195,32 +207,44 @@ class LSM(BaseModel):
             samples = np.vstack([s[0][1] for s in batch])
             times_filt = np.arange(0, len(samples) / self.downsample, 1/self.downsample)
             ts_batch = TSContinuous(times_filt[:len(samples)], samples[:len(times_filt)])
-            final_out, final_out_4bits, final_out_5bits, final_out_6bits, ts_res, ts_res_4bits, ts_res_5bits, ts_res_6bits = self.predict(ts_batch)
+            final_out, final_out_2bits, final_out_3bits,  final_out_4bits, final_out_5bits, final_out_6bits, ts_res, ts_res_2bits, ts_res_3bits, ts_res_4bits, ts_res_5bits, ts_res_6bits = self.predict(ts_batch)
             tgt_signals = ts_target_signal(np.linspace(0.0,5.0,len(final_out)))
 
             # - Apply gain
+            final_out_2bits *= self.gain_2bit
+            final_out_3bits *= self.gain_3bit
             final_out_4bits *= self.gain_4bit
             final_out_5bits *= self.gain_5bit
             final_out_6bits *= self.gain_6bit
             
             final_out_mse.append( np.mean( (final_out.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
+            final_out_mse_2bit.append( np.mean( (final_out_2bits.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
+            final_out_mse_3bit.append( np.mean( (final_out_3bits.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
             final_out_mse_4bit.append( np.mean( (final_out_4bits.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
             final_out_mse_5bit.append( np.mean( (final_out_5bits.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
             final_out_mse_6bit.append( np.mean( (final_out_6bits.reshape((-1,))-tgt_signals.reshape((-1,)))**2 ) )
 
             mfr.append(self.get_mfr( ts_res ))
+            mfr_2bit.append(self.get_mfr( ts_res_2bits ))
+            mfr_3bit.append(self.get_mfr( ts_res_3bits ))
             mfr_4bit.append(self.get_mfr( ts_res_4bits ))
             mfr_5bit.append(self.get_mfr( ts_res_5bits ))
             mfr_6bit.append(self.get_mfr( ts_res_6bits ))
 
             # - Get the predictions
             predicted_label = self.get_prediction(final_out)
+            predicted_label_2bit = self.get_prediction(final_out_2bits)
+            predicted_label_3bit = self.get_prediction(final_out_3bits)
             predicted_label_4bit = self.get_prediction(final_out_4bits)
             predicted_label_5bit = self.get_prediction(final_out_5bits)
             predicted_label_6bit = self.get_prediction(final_out_6bits)
 
             if(predicted_label == target_labels[0]):
                 correct += 1
+            if(predicted_label_2bit == target_labels[0]):
+                correct_2bit += 1
+            if(predicted_label_3bit == target_labels[0]):
+                correct_3bit += 1
             if(predicted_label_4bit == target_labels[0]):
                 correct_4bit += 1
             if(predicted_label_5bit == target_labels[0]):
@@ -229,12 +253,14 @@ class LSM(BaseModel):
                 correct_6bit += 1
             counter += 1
 
-            print(f"True label {target_labels[0]} Full {predicted_label} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
+            print(f"True label {target_labels[0]} Full {predicted_label} 2Bit {predicted_label_2bit} 3Bit {predicted_label_3bit} 4Bit {predicted_label_4bit} 5Bit {predicted_label_5bit} 6Bit {predicted_label_6bit}")
 
             if(self.verbose > 0):
                 tb = np.linspace(0.0,5.0,len(final_out))
                 plt.clf()
                 plt.plot(tb, final_out, label="Normal")
+                plt.plot(tb, final_out_2bits, label="2bits")
+                plt.plot(tb, final_out_3bits, label="3bits")
                 plt.plot(tb, final_out_4bits, label="4bits")
                 plt.plot(tb, final_out_5bits, label="5bits")
                 plt.plot(tb, final_out_6bits, label="6bits")
@@ -246,15 +272,17 @@ class LSM(BaseModel):
         # - End testing loop
 
         test_acc = correct / counter
+        test_acc_2bit = correct_2bit / counter
+        test_acc_3bit = correct_3bit / counter
         test_acc_4bit = correct_4bit / counter
         test_acc_5bit = correct_5bit / counter
         test_acc_6bit = correct_6bit / counter
-        print(f"Test accuracy: Full: {test_acc} 4bit: {test_acc_4bit} 5bit: {test_acc_5bit} 6bit: {test_acc_6bit}")
+        print(f"Test accuracy: Full: {test_acc} 2bit: {test_acc_2bit} 3bit: {test_acc_3bit} 4bit: {test_acc_4bit} 5bit: {test_acc_5bit} 6bit: {test_acc_6bit}")
 
         out_dict = {}
-        out_dict["test_acc"] = [test_acc,test_acc_4bit,test_acc_5bit,test_acc_6bit]
-        out_dict["final_out_mse"] = [np.mean(final_out_mse).item(),np.mean(final_out_mse_4bit).item(),np.mean(final_out_mse_5bit).item(),np.mean(final_out_mse_6bit).item()]
-        out_dict["mfr"] = [np.mean(mfr).item(),np.mean(mfr_4bit).item(),np.mean(mfr_5bit).item(),np.mean(mfr_6bit).item()]
+        out_dict["test_acc"] = [test_acc,test_acc_2bit,test_acc_3bit,test_acc_4bit,test_acc_5bit,test_acc_6bit]
+        out_dict["final_out_mse"] = [np.mean(final_out_mse).item(),np.mean(final_out_mse_2bit).item(),np.mean(final_out_mse_3bit).item(),np.mean(final_out_mse_4bit).item(),np.mean(final_out_mse_5bit).item(),np.mean(final_out_mse_6bit).item()]
+        out_dict["mfr"] = [np.mean(mfr).item(),np.mean(mfr_2bit).item(),np.mean(mfr_3bit).item(),np.mean(mfr_4bit).item(),np.mean(mfr_5bit).item(),np.mean(mfr_6bit).item()]
  
         print(out_dict)
         self.out_dict = out_dict
@@ -273,12 +301,8 @@ if __name__ == "__main__":
 
     np.random.seed(42)
 
-<<<<<<< HEAD
     home = os.path.expanduser('~')
     output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
-=======
-    output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
->>>>>>> b0302cd5bf034ae3c4bc28c8906288543d4f647e
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

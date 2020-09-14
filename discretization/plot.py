@@ -98,5 +98,5 @@ ax2.spines["right"].set_visible(False)
 
 
 plt.plot()
-# plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/discretization.png", dpi=1200)
+plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/discretization.png", dpi=1200)
 plt.show()

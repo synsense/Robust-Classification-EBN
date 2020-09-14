@@ -49,8 +49,6 @@ class HeySnipsBPTT(BaseModel):
         
         home = os.path.expanduser('~')
         self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
-        if os.uname().nodename == 'zemo': 
-            self.base_path = f"/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -339,8 +337,6 @@ if __name__ == "__main__":
 
     home = os.path.expanduser('~')
     output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
-    if os.uname().nodename == 'zemo': 
-        output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

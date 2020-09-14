@@ -1,28 +1,4 @@
-/home/ssolin/rockpool/rockpool/utilities/__init__.py:56: UserWarning: Could not load package .gpl.timedarray_shift
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/layers/__init__.py:105: UserWarning: Could not load package .gpl.iaf_brian
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/layers/__init__.py:105: UserWarning: Could not load package .gpl.exp_synapses_brian
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/layers/__init__.py:105: UserWarning: Could not load package .gpl.pytorch.exp_synapses_torch
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/layers/__init__.py:105: UserWarning: Could not load package .gpl.pytorch.iaf_torch
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/devices/__init__.py:68: UserWarning: Could not load package .dynapse_control_extd
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/devices/__init__.py:68: UserWarning: Could not load package .dynapse_control
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/layers/__init__.py:105: UserWarning: Could not load package .gpl.devices.dynap_hw
-  warn("Could not load package " + strModule)
-/home/ssolin/rockpool/rockpool/networks/__init__.py:61: UserWarning: Could not load package .gpl.net_deneve
-  warn("Could not load package " + strModule)
-No module named 'brian2'
-No module named 'brian2'
-No module named 'brian2'
-No module named 'torch'
-No module named 'torch'
-No module named 'rpyc'
-No module named 'rpyc'
-No module named 'rpyc'
-cannot import name 'FFExpSynBrian'
-Exiting because data was already generated. Uncomment this line to reproduce the results.
+  File "evaluate_reservoir.py", line 306
+    <<<<<<< HEAD
+     ^
+SyntaxError: invalid syntax

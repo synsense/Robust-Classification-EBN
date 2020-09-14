@@ -1,5 +1,6 @@
 **/.vscode
 **/cached
 **/__pycache__
+**/*.log
 # **/mismatch/Resources/*.json
 # **/mismatch/Resources/Plotting/

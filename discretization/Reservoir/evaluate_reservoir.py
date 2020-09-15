@@ -36,6 +36,8 @@ class LSM(BaseModel):
         # - Create network
         home = os.path.expanduser('~')
         self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
+        if os.uname().nodename == 'zemo': 
+            output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -303,6 +305,11 @@ if __name__ == "__main__":
 
     home = os.path.expanduser('~')
     output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+<<<<<<< HEAD
+=======
+    if os.uname().nodename == 'zemo': 
+        output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
+>>>>>>> 3dc17b0edc14a6ec296646c33071cd0efdfb795e
 
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

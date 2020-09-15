@@ -48,7 +48,7 @@ class HeySnipsBPTT(BaseModel):
         self.gain_6bit = 1.0
         
         home = os.path.expanduser('~')
-        self.base_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch'
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -336,9 +336,8 @@ if __name__ == "__main__":
     np.random.seed(42)
 
     home = os.path.expanduser('~')
-    
     output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/bptt{network_idx}_discretization_out.json'
-    
+
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

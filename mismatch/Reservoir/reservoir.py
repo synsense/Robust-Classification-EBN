@@ -29,7 +29,7 @@ def createNetwork(params, fs, numTargets=0, record=True, num_cores=1,
 
     ############## PARAMETERS ################
 
-    np.random.seed(int(time.time()))
+    # np.random.seed(int(time.time()))
 
     resolution = params.get("dt", 0.001)      # sec
 

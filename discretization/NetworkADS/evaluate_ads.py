@@ -536,7 +536,7 @@ if __name__ == "__main__":
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
         sys.exit(0)
 
-    batch_size = 100
+    batch_size = 50
     balance_ratio = 1.0
     snr = 10.
 

@@ -83,7 +83,8 @@ class LSM(BaseModel):
 
         ##### CREATE NETWORK ######
         network_name = f"Resources/reservoir{self.network_idx}.json"
-        self.model_reservoir_path = os.path.join("/home/julian/Documents/RobustClassificationWithEBNs/mismatch", network_name)
+        home = os.path.expanduser("~")
+        self.model_reservoir_path = os.path.join(f"{home}/Documents/RobustClassificationWithEBNs/mismatch", network_name)
         if(os.path.exists(self.model_reservoir_path)):
             print("Reservoir already trained. Exiting. Please comment out this line if you would like to re-train the model.",flush=True)
             sys.exit(0)

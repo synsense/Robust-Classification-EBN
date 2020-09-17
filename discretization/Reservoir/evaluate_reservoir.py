@@ -36,8 +36,6 @@ class LSM(BaseModel):
         # - Create network
         home = os.path.expanduser('~')
         self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
-        if os.uname().nodename == 'zemo': 
-            output_final_path = f'/mnt/local/home/sergio/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/reservoir{network_idx}_discretization_out.json'
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:

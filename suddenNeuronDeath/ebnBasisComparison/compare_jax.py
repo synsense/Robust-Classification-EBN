@@ -156,7 +156,7 @@ class HeySnipsNetworkADS(BaseModel):
         return (batched_spiking_in, batched_rate_net_dynamics, batched_rate_output)
 
     def find_gain(self, output_original, output_new):
-        gains = np.linspace(1.0,2.0,50)
+        gains = np.linspace(0.5,5.5,100)
         best_gain=1.0; best_mse=np.inf
         for gain in gains:
             mse = 0

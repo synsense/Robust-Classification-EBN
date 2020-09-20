@@ -46,7 +46,8 @@ class HeySnipsBPTT(BaseModel):
         self.out_dict = {}
         self.noise_gain = 1.0
 
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -230,7 +231,8 @@ if __name__ == "__main__":
     verbose = args['verbose']
     network_idx = args['network_idx']
 
-    bptt_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/bptt{network_idx}_noise_analysis_output.json'
+    home = os.path.expanduser('~')
+    bptt_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/bptt{network_idx}_noise_analysis_output.json'
 
     if(os.path.exists(bptt_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

@@ -30,7 +30,8 @@ class LSM(BaseModel):
         self.noise_std_orig = noise_std
 
         # - Create network
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -191,7 +192,8 @@ if __name__ == "__main__":
     args = vars(parser.parse_args())
     network_idx = args['network_idx']
 
-    reservoir_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/reservoir{network_idx}_noise_analysis_output.json'
+    home = os.path.expanduser('~')
+    reservoir_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/reservoir{network_idx}_noise_analysis_output.json'
 
     if(os.path.exists(reservoir_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

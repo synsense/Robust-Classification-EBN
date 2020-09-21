@@ -42,6 +42,7 @@ class LSM(BaseModel):
                 cls = getattr(layers, lyr_conf["class_name"])
                 cn = lyr_conf.pop("class_name")
                 if(cn == "RecIAFSpkInNest"):
+                    lyr_conf.pop("noise_std")
                     self.noise_std = self.noise_std_orig * np.abs(np.abs(np.asarray(lyr_conf["v_thresh"]))-np.abs(np.asarray(lyr_conf["v_reset"]))) * np.asarray(lyr_conf["tau_mem"]) / lyr_conf["dt"] * 1000
                     layers_.append(cls(noise_std=self.noise_std, **lyr_conf))
                 else:

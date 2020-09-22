@@ -24,7 +24,7 @@ import argparse
 from copy import deepcopy
 
 def filter_1d(data, alpha = 0.9):
-    last = data[0]H_tanh
+    last = data[0]
     out = np.zeros((len(data),))
     out[0] = last
     for i in range(1,len(data)):

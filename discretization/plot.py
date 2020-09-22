@@ -50,10 +50,10 @@ x_orig = np.linspace(0,5,6)
 precisions = ["Full", "6 bit", "5 bit", "4 bit", "3 bit", "2 bit"]
 
 
-def smooth(y):
+def smooth(y, sigma=1):
     f = interp1d(x=x_orig,y=y, kind="linear")
     r = f(levels)
-    r_smoothed = gaussian_filter1d(r, sigma=50)
+    r_smoothed = gaussian_filter1d(r, sigma=sigma)
     return r_smoothed
 
 fig = plt.figure(figsize=(7.14,1.91),constrained_layout=True)
@@ -66,10 +66,10 @@ ax1.set_xlabel("Precision")
 
 for idx,architecture in enumerate(architectures):
     mean_vector = smooth(np.array([np.mean(data_full[architecture]["test_acc"]["full"]),np.mean(data_full[architecture]["test_acc"]["6"]),np.mean(data_full[architecture]["test_acc"]["5"]),
-                                        np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])]))
+                                        np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])]), sigma=1)
 
     std_vector = smooth(np.array([np.std(data_full[architecture]["test_acc"]["full"]),np.std(data_full[architecture]["test_acc"]["6"]),np.std(data_full[architecture]["test_acc"]["5"]),
-                                        np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])]))
+                                        np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])]), sigma=20)
 
     mean_mse = np.array([np.mean(data_full[architecture]["final_out_mse"]["full"]),np.mean(data_full[architecture]["final_out_mse"]["6"]),np.mean(data_full[architecture]["final_out_mse"]["5"]),
                                         np.mean(data_full[architecture]["final_out_mse"]["4"]),np.mean(data_full[architecture]["final_out_mse"]["3"]),np.mean(data_full[architecture]["final_out_mse"]["2"])])
@@ -77,13 +77,13 @@ for idx,architecture in enumerate(architectures):
     std_mse = np.array([np.std(data_full[architecture]["final_out_mse"]["full"]),np.std(data_full[architecture]["final_out_mse"]["6"]),np.std(data_full[architecture]["final_out_mse"]["5"]),
                                         np.std(data_full[architecture]["final_out_mse"]["4"]),np.std(data_full[architecture]["final_out_mse"]["3"]),np.std(data_full[architecture]["final_out_mse"]["2"])])
 
-    mean_vector_mse = smooth(mean_mse)
-    std_vector_mse = smooth(std_mse)
+    mean_vector_mse = smooth(mean_mse, sigma=1)
+    std_vector_mse = smooth(std_mse, sigma=20)
 
-    ax1.plot(levels,mean_vector, marker="o", markevery=[0,166,333,499,666,833,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
+    ax1.plot(levels,mean_vector, marker="o", markevery=[0,200,400,600,800,1000], markersize=5, label=architecture_labels[idx], color=colors[idx])
     ax1.fill_between(levels,mean_vector-std_vector, mean_vector+std_vector, alpha=0.3, facecolor=colors[idx])
 
-    ax2.plot(levels,mean_vector_mse, marker="o", markevery=[0,166,333,499,666,833,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
+    ax2.plot(levels,mean_vector_mse, marker="o", markevery=[0,200,400,600,800,1000], markersize=5, label=architecture_labels[idx], color=colors[idx])
     ax2.fill_between(levels,mean_vector_mse-std_vector_mse, mean_vector_mse+std_vector_mse, alpha=0.3, facecolor=colors[idx])
 
 ax1.legend(frameon=False, loc=0, fontsize=5)

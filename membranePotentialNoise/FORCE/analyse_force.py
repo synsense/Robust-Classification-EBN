@@ -53,7 +53,8 @@ class HeySnipsFORCE(BaseModel):
         self.num_rate_neurons = 128 
         self.num_targets = len(labels)
         self.time_base = np.arange(0.0,5.0,self.dt)
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -80,7 +81,8 @@ class HeySnipsFORCE(BaseModel):
         self.N_out = self.w_out.shape[1]
 
         network_name = f"Resources/force{network_idx}.json"
-        self.model_path_force_net = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/{network_name}"
+        home = os.path.expanduser('~')
+        self.model_path_force_net = f"{home}/Documents/RobustClassificationWithEBNs/mismatch/{network_name}"
 
         if(os.path.exists(self.model_path_force_net)):
             print("Loading networks...")
@@ -260,7 +262,8 @@ if __name__ == "__main__":
     verbose = args['verbose']
     network_idx = args['network_idx']
 
-    force_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/force{network_idx}_noise_analysis_output.json'
+    home = os.path.expanduser('~')
+    force_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/force{network_idx}_noise_analysis_output.json'
 
     if(os.path.exists(force_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

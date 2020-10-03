@@ -238,6 +238,50 @@ class HeySnipsNetworkADS(BaseModel):
 
         self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
+    def adjust_ebn_connections(self, data_loader, fn_metrics):
+        num_iters = 100
+        for batch_id, [batch, _] in enumerate(data_loader.val_set()):
+
+            if (batch_id * data_loader.batch_size >= num_iters):
+                break
+
+            filtered = np.stack([s[0][1] for s in batch])
+            tgt_signals = np.stack([s[2] for s in batch])
+            (batched_spiking_in, batched_rate_net_dynamics, _) = self.get_data(filtered_batch=filtered)
+            
+            for idx in range(len(batch)):
+                spiking_in = np.reshape(batched_spiking_in[idx], newshape=(1,batched_spiking_in.shape[1],batched_spiking_in.shape[2]))
+
+                o = self.ads_layer_mismatch.train_ebn(spiking_in, num_timesteps=filtered.shape[1], eta=0.000001, verbose=self.verbose > 0)    
+                if(self.verbose > 0):
+                    output_ts, states_ts = o
+                else:
+                    output_ts = o
+
+                if(self.verbose > 0):
+                    plt.clf()
+                    output_ts = np.squeeze(output_ts)
+                    stagger = np.zeros(output_ts.shape)
+                    for i in range(6):
+                        stagger[:,i] += i*1.5
+                    plt.subplot(311)
+                    plt.plot(self.time_base, (output_ts+stagger)[:,:6], label="Spiking")
+                    plt.plot(self.time_base, (batched_rate_net_dynamics[idx]+stagger)[:,:6], label="Target")
+                    plt.subplot(312)
+                    spikes_ind = np.nonzero(np.squeeze(states_ts["spikes"]))
+                    times = spikes_ind[0]
+                    channels = spikes_ind[1]
+                    plt.scatter(self.dt*times, channels, color="k", linewidths=0.0)
+                    plt.xlim([0.0,5.0])
+                    plt.subplot(313)
+                    plt.plot(self.time_base, np.reshape(tgt_signals[idx],(-1,)), label="Target")
+                    plt.plot(self.time_base, (output_ts @ self.w_out).ravel(), label="Prediction")
+                    plt.ylim([-0.3,1.0])
+                    plt.legend()
+                    plt.draw()
+                    plt.pause(0.001)
+
+
     def train(self, data_loader, fn_metrics):
         yield {"train_loss": 0.0}
 

@@ -156,7 +156,7 @@ class HeySnipsBPTT(BaseModel):
         yield {"train_loss": 0.0}
 
     def find_gain(self, target_labels, output_new):
-        gains = np.linspace(1.0,2.0,50)
+        gains = np.linspace(1.0,5.5,100)
         best_gain=1.0; best_acc=0.5
         for gain in gains:
             correct = 0

@@ -75,7 +75,7 @@ class TemporalXORNetwork:
 
         if(os.path.exists(self.model_path_ads_net)):
             print("Network already trained. Exiting...")
-            # sys.exit(0)
+            sys.exit(0)
             self.ads_layer = self.load(self.model_path_ads_net)
             self.tau_mem = self.ads_layer.tau_mem[0]
             self.Nc = self.ads_layer.weights_in.shape[0]

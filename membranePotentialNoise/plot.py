@@ -13,8 +13,8 @@ from scipy.interpolate import interp1d
 from scipy.ndimage.filters import gaussian_filter1d
 from copy import copy
 
-architectures = ["force", "reservoir", "bptt", "ads_jax_ebn"]
-architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS"]
+architectures = ["force", "reservoir", "bptt", "ads_jax_ebn", "ads_jax"]
+architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS", "Network ADS No EBN"]
 keys = ["test_acc", "final_out_mse"]
 dkeys = ["0.0", "0.01", "0.05", "0.1"]
 
@@ -64,7 +64,7 @@ ax2.set_yscale("log")
 colors = ["C2","C3","C4","C5","C6","C7","C8"]
 ax1.set_xlabel("Noise level")
 
-for idx,architecture in enumerate(architectures):
+for idx,architecture in enumerate(architectures[:4]):
     mean_vector = smooth(np.array([np.mean(data_full[architecture]["test_acc"]["0.0"]),np.mean(data_full[architecture]["test_acc"]["0.01"]),np.mean(data_full[architecture]["test_acc"]["0.05"]),
                                         np.mean(data_full[architecture]["test_acc"]["0.1"])]), sigma=1)
 

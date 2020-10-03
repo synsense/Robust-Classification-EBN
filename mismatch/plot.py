@@ -11,7 +11,6 @@ matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
 import matplotlib.pyplot as plt
 import matplotlib.collections as clt
-import ptitprince as pt
 from matplotlib.cbook import boxplot_stats
 import matplotlib.gridspec as gridspec
 import matplotlib.colors as colors

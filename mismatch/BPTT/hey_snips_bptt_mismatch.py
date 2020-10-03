@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from SIMMBA import BaseModel
 from SIMMBA.experiments.HeySnipsDEMAND import HeySnipsDEMAND
 from rockpool import layers, Network
-from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, RecLIFCurrentInJax_SO
+from rockpool.layers import H_tanh, RecRateEulerJax_IO, RecLIFCurrentInJax, RecLIFCurrentInJax_SO, FFLIFCurrentInJax_SO, FFExpSynCurrentInJax
 from rockpool.networks import JaxStack
 import os
 import sys
@@ -43,9 +43,18 @@ def apply_mismatch(net, std_p=0.2):
     tau_syn = np.abs(_m(tau_syn))
     tau_mem = np.abs(_m(tau_mem))
 
-    # - Create Reservoir layer
+    lyrLIFInput_mismatch = FFLIFCurrentInJax_SO(
+            w_in = net.LIF_Input.w_in * (1 + mismatch_std*np.random.randn(net.LIF_Input.w_in.shape[0],net.LIF_Input.w_in.shape[1])), 
+            tau_syn = net.LIF_Input.tau_syn,
+            tau_mem = net.LIF_Input.tau_mem,
+            bias = net.LIF_Input.bias,
+            noise_std = net.LIF_Input.noise_std,
+            dt = net.LIF_Input.dt,
+            name = 'LIF_Input',    
+    )
+
     lyrLIFRecurrent_mismatch = RecLIFCurrentInJax_SO(
-        w_recurrent = copy(net.LIF_Reservoir.weights),
+        w_recurrent = net.LIF_Reservoir.weights * (1 + mismatch_std*np.random.randn(net.LIF_Reservoir.weights.shape[0],net.LIF_Reservoir.weights.shape[1])),
         tau_mem = tau_mem,
         tau_syn = tau_syn,
         bias = bias,
@@ -54,8 +63,16 @@ def apply_mismatch(net, std_p=0.2):
         name = 'LIF_Reservoir',
     )
 
+    lyrLIFReadout_mismatch = FFExpSynCurrentInJax(
+        weights = net.LIF_Readout.weights * (1 + mismatch_std * np.random.randn(net.LIF_Readout.weights.shape[0],net.LIF_Readout.weights.shape[1])),  
+        tau = net.LIF_Readout.tau,
+        noise_std = net.LIF_Readout.noise_std,
+        dt = net.LIF_Readout.dt,
+        name = 'LIF_Readout',
+    )
+
     # - Create JaxStack
-    net_mismatch = JaxStack([deepcopy(net.LIF_Input), lyrLIFRecurrent_mismatch, deepcopy(net.LIF_Readout)])
+    net_mismatch = JaxStack([lyrLIFInput_mismatch, lyrLIFRecurrent_mismatch, lyrLIFReadout_mismatch])
     return net_mismatch
 
 class HeySnipsBPTT(BaseModel):

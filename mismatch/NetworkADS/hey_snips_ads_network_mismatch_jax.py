@@ -31,11 +31,15 @@ def apply_mismatch(ads_layer, mismatch_std=0.2, beta=0.0):
     new_tau_mem = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.tau_mem) + np.mean(ads_layer.tau_mem))
     new_v_thresh = np.abs(np.random.randn(N)*mismatch_std*np.mean(ads_layer.v_thresh) + np.mean(ads_layer.v_thresh))
     
+    new_weights_in = ads_layer.weights_in * (1 + mismatch_std*np.random.randn(ads_layer.weights_in.shape[0],ads_layer.weights_in.shape[1]))
+    new_weights_out = ads_layer.weights_out * (1 + mismatch_std*np.random.randn(ads_layer.weights_out.shape[0],ads_layer.weights_out.shape[1]))
+    new_weights_slow = ads_layer.weights_slow * (1 + mismatch_std*np.random.randn(ads_layer.weights_slow.shape[0],ads_layer.weights_slow.shape[1]))
+
     # - Create new ads_layer
-    mismatch_ads_layer = JaxADS(weights_in = ads_layer.weights_in,
-                                    weights_out = ads_layer.weights_out,
+    mismatch_ads_layer = JaxADS(weights_in = new_weights_in,
+                                    weights_out = new_weights_out,
                                     weights_fast = ads_layer.weights_fast,
-                                    weights_slow = ads_layer.weights_slow,
+                                    weights_slow = new_weights_slow,
                                     eta = ads_layer.eta,
                                     k = ads_layer.k,
                                     noise_std = ads_layer.noise_std,

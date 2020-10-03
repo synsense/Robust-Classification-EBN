@@ -39,11 +39,19 @@ def apply_mismatch(force_layer, std_p=0.2):
     tau_syn = np.abs(_m(tau_syn, std_p))
     tau_mem = np.abs(_m(tau_mem, std_p))
 
+    def apply_mm_weights(M, mismatch_gain):
+        return M * (1 + mismatch_std*np.random.randn(M.shape[0],M.shape[1]))
+    
+    new_w_in = apply_mm_weights(force_layer.w_in, std_p)
+    new_w_rec = apply_mm_weights(force_layer.w_rec, std_p)
+    new_w_out = apply_mm_weights(force_layer.w_out, std_p)
+    new_E = apply_mm_weights(force_layer.E, std_p)
+
     # - Create force layer
-    force_layer_mismatch = JaxFORCE(w_in = force_layer.w_in,
-                            w_rec = force_layer.w_rec,
-                            w_out = force_layer.w_out,
-                            E = force_layer.E,
+    force_layer_mismatch = JaxFORCE(w_in = new_w_in,
+                            w_rec = new_w_rec,
+                            w_out = new_w_out,
+                            E = new_E,
                             dt = force_layer.dt,
                             alpha = force_layer.alpha,
                             v_thresh = v_thresh,

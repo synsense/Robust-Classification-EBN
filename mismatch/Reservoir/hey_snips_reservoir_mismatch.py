@@ -81,6 +81,10 @@ class LSM(BaseModel):
             new_th = np.random.normal(th, abs(v_thresh_std * th), 1)
             if(lyr_res_mismatch.v_reset[i] < new_th):
                 lyr_res_mismatch.v_thresh[i] = new_th
+
+        # - Apply mismatch to the weights
+        lyr_res_mismatch.weights_rec = lyr_res_mismatch.weights_rec * (1 + mismatch_std * np.random.randn(lyr_res_mismatch.weights_rec.shape[0], lyr_res_mismatch.weights_rec.shape[1]))
+        lyr_out_mismatch.weights = lyr_out_mismatch.weights * (1 + mismatch_std * np.random.randn(lyr_out_mismatch.weights.shape[0], lyr_out_mismatch.weights.shape[1]))  
         
         return lyr_filt_mismatch, lyr_inp_mismatch, lyr_res_mismatch, lyr_out_mismatch
 

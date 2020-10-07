@@ -231,7 +231,7 @@ class HeySnipsNetworkFORCE(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if(batch_id*data_loader.batch_size >= 100):
+            if(batch_id*data_loader.batch_size >= 500):
                 break
         
             filtered = np.stack([s[0][1] for s in batch])
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 1")
-    parser.add_argument('--num-trials', default=50, type=int, help="Number of trials that this experiment is repeated for every mismatch_std")
+    parser.add_argument('--num-trials', default=10, type=int, help="Number of trials that this experiment is repeated for every mismatch_std")
     parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())

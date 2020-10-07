@@ -200,7 +200,7 @@ class LSM(BaseModel):
 
         for batch_id, [batch, _] in enumerate(data_loader.test_set()):
 
-            if (batch_id*data_loader.batch_size >= 100):
+            if (batch_id*data_loader.batch_size >= 500):
                 break
 
             batch = copy.deepcopy(list(batch))
@@ -262,7 +262,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
-    parser.add_argument('--num-trials', default=50, type=int, help="Number of trials this experiment is repeated")
+    parser.add_argument('--num-trials', default=10, type=int, help="Number of trials this experiment is repeated")
     parser.add_argument('--network-idx', default="", type=str, help="Index of network to be analyzed")
 
     args = vars(parser.parse_args())

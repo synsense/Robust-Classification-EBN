@@ -33,7 +33,8 @@ class LSM(BaseModel):
         self.mismatch_gain = 1.0
 
         # - Create network
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
         self.network_path = os.path.join(self.base_path, f"Resources/reservoir{network_idx}.json")
 
         with open(self.network_path, "r") as f:
@@ -278,7 +279,8 @@ if __name__ == "__main__":
 
     output_dict = {}
 
-    reservoir_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/reservoir{network_idx}_mismatch_analysis_output.json'
+    home = os.path.expanduser('~')
+    reservoir_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/reservoir{network_idx}_mismatch_analysis_output.json'
 
     if(os.path.exists(reservoir_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

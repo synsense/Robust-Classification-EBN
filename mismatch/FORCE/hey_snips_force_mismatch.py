@@ -84,7 +84,8 @@ class HeySnipsNetworkFORCE(BaseModel):
         self.mismatch_gain = 1.0
         self.mismatch_std = mismatch_std
 
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch/"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch/"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -327,7 +328,8 @@ if __name__ == "__main__":
     num_trials = args['num_trials']
     network_idx = args['network_idx']
 
-    force_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force{network_idx}_mismatch_analysis_output.json'
+    home = os.path.expanduser('~')
+    force_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force{network_idx}_mismatch_analysis_output.json'
 
     if(os.path.exists(force_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

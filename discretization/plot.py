@@ -51,6 +51,8 @@ precisions = ["Full", "6 bit", "5 bit", "4 bit", "3 bit", "2 bit"]
 
 
 def smooth(y, sigma=1):
+    x_orig = np.linspace(0,len(y)-1,len(y))
+    levels = np.linspace(0,len(y)-1,1+200*(len(y)-1))
     f = interp1d(x=x_orig,y=y, kind="linear")
     r = f(levels)
     r_smoothed = gaussian_filter1d(r, sigma=sigma)
@@ -65,11 +67,11 @@ colors = ["C2","C3","C4","C5","C6"]
 ax1.set_xlabel("Precision")
 
 for idx,architecture in enumerate(architectures):
-    mean_vector = smooth(np.array([np.mean(data_full[architecture]["test_acc"]["full"]),np.mean(data_full[architecture]["test_acc"]["6"]),np.mean(data_full[architecture]["test_acc"]["5"]),
-                                        np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])]), sigma=1)
+    mean_acc = np.array([np.mean(data_full[architecture]["test_acc"]["full"]),np.mean(data_full[architecture]["test_acc"]["6"]),np.mean(data_full[architecture]["test_acc"]["5"]),
+                                        np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])])
 
-    std_vector = smooth(np.array([np.std(data_full[architecture]["test_acc"]["full"]),np.std(data_full[architecture]["test_acc"]["6"]),np.std(data_full[architecture]["test_acc"]["5"]),
-                                        np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])]), sigma=20)
+    std_acc = np.array([np.std(data_full[architecture]["test_acc"]["full"]),np.std(data_full[architecture]["test_acc"]["6"]),np.std(data_full[architecture]["test_acc"]["5"]),
+                                        np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])])
 
     mean_mse = np.array([np.mean(data_full[architecture]["final_out_mse"]["full"]),np.mean(data_full[architecture]["final_out_mse"]["6"]),np.mean(data_full[architecture]["final_out_mse"]["5"]),
                                         np.mean(data_full[architecture]["final_out_mse"]["4"]),np.mean(data_full[architecture]["final_out_mse"]["3"]),np.mean(data_full[architecture]["final_out_mse"]["2"])])
@@ -77,13 +79,31 @@ for idx,architecture in enumerate(architectures):
     std_mse = np.array([np.std(data_full[architecture]["final_out_mse"]["full"]),np.std(data_full[architecture]["final_out_mse"]["6"]),np.std(data_full[architecture]["final_out_mse"]["5"]),
                                         np.std(data_full[architecture]["final_out_mse"]["4"]),np.std(data_full[architecture]["final_out_mse"]["3"]),np.std(data_full[architecture]["final_out_mse"]["2"])])
 
+
+    mean_vector_acc = smooth(mean_acc, sigma=1)
+    std_vector_acc = smooth(std_acc, sigma=20)
+    if(architecture == "reservoir"):
+        mean_vector_acc = smooth(mean_acc[1:], sigma=1)
+        std_vector_acc = smooth(std_acc[1:], sigma=20)
+    
     mean_vector_mse = smooth(mean_mse, sigma=1)
-    std_vector_mse = smooth(std_mse, sigma=20)
+    std_vector_mse = smooth(std_mse-mean_mse, sigma=20) + mean_vector_mse
 
-    ax1.plot(levels,mean_vector, marker="o", markevery=[0,200,400,600,800,1000], markersize=5, label=architecture_labels[idx], color=colors[idx])
-    ax1.fill_between(levels,mean_vector-std_vector, mean_vector+std_vector, alpha=0.3, facecolor=colors[idx])
+    x = levels
+    if(architecture == "reservoir"):
+        x = np.linspace(1,5.0,len(std_vector_acc))
+        ax1.plot(x,mean_vector_acc, marker="o", markersize=5, markevery=[0,200,400,600,800], label=architecture_labels[idx], color=colors[idx])
+        ax1.fill_between(x,mean_vector_acc-std_vector_acc, mean_vector_acc+std_vector_acc, alpha=0.3, facecolor=colors[idx])
+        ax1.plot([0], mean_acc[0], marker="o", markersize=8, color=colors[idx])
+        ax1.fill_between([0],mean_acc[0]-std_acc[0], mean_acc[0]+std_acc[0], alpha=0.3, facecolor=colors[idx])
+    else:
+        ax1.plot(x,mean_vector_acc, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
+        ax1.fill_between(x,mean_vector_acc-std_vector_acc, mean_vector_acc+std_vector_acc, alpha=0.3, facecolor=colors[idx])
 
-    ax2.plot(levels,mean_vector_mse, marker="o", markevery=[0,200,400,600,800,1000], markersize=5, label=architecture_labels[idx], color=colors[idx])
+    if(architecture == "reservoir"):
+        continue
+
+    ax2.plot(levels,mean_vector_mse, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
     ax2.fill_between(levels,mean_vector_mse-std_vector_mse, mean_vector_mse+std_vector_mse, alpha=0.3, facecolor=colors[idx])
 
 ax1.legend(frameon=False, loc=0, fontsize=5)

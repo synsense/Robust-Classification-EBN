@@ -18,6 +18,7 @@ import matplotlib.cm as cm
 from matplotlib.lines import Line2D
 from matplotlib import ticker as mticker
 
+USE_VIOLIN = True
 
 def generate_random_data():
     return 0.1*np.random.randn(3, 50)+np.random.uniform()
@@ -30,6 +31,8 @@ os.chdir(directory_name)
 mismatch_stds = [0.05, 0.2, 0.3]
 architectures = ["reservoir","force", "bptt", "ads_jax_ebn"]
 label_architectures = ["Reservoir", "FORCE", "BPTT", "Network ADS"]
+architectures = ["force", "bptt", "ads_jax_ebn"]
+label_architectures = ["FORCE", "BPTT", "Network ADS"]
 keys = ["test_acc","final_out_power","final_out_mse","mfr","dynamics_power","dynamics_mse"]
 keys_bptt = ["test_acc","final_out_mse"]
 keys_reservoir = ["test_acc","final_out_mse","mfr"]
@@ -58,7 +61,7 @@ def initialize_dict(architecture, use_fake):
 
 data_all = []
 for architecture in architectures:
-    data_all_networks = initialize_dict(architecture, architecture != "ads_jax_ebn" and architecture != "bptt" and architecture != "force")
+    data_all_networks = initialize_dict(architecture, architecture != "ads_jax_ebn" and architecture != "bptt" and architecture != "force" and architecture != "reservoir")
     for network_idx in range(networks):
         # - Load the dictionary
         fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{architecture}{str(network_idx)}_mismatch_analysis_output.json"
@@ -86,7 +89,7 @@ for architecture in architectures:
     data_all.append(data_all_networks)
 
 fig = plt.figure(figsize=(7.14,3.91))
-outer = gridspec.GridSpec(1, 4, figure=fig, wspace=0.2)
+outer = gridspec.GridSpec(1, len(architectures), figure=fig, wspace=0.2)
 
 c_orig = (0, 0.1607, 0.2392, 1.0)
 colors_mismatch = [(0.9176, 0.8862, 0.71764, 1.0) ,(0.9882, 0.7490, 0.2862, 1.0), (0.8392, 0.1568, 0.1568, 1.0)]
@@ -162,13 +165,13 @@ for ax in fig.get_axes():
     ax.spines['left'].set_visible(ax.is_first_col())
     ax.spines['right'].set_visible(False)
 
-plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure4.png", dpi=1200)
+plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure4_acc.png", dpi=1200)
 plt.show(block=False)
 
 
 # - MSE Plot
 fig = plt.figure(figsize=(7.14,3.91))
-outer = gridspec.GridSpec(1, 4, figure=fig, wspace=0.2)
+outer = gridspec.GridSpec(1, len(architectures), figure=fig, wspace=0.2)
 
 c_orig = (0, 0.1607, 0.2392, 1.0)
 colors_mismatch = [(0.9176, 0.8862, 0.71764, 1.0) ,(0.9882, 0.7490, 0.2862, 1.0), (0.8392, 0.1568, 0.1568, 1.0)]
@@ -192,43 +195,71 @@ for idx_architecture, architecture in enumerate(architectures):
         outliers_mism = [y for stat in boxplot_stats(scores_mism) for y in stat['fliers']]
         scores_mism = np.array(scores_mism[[(mm != outliers_mism).all() for mm in scores_mism]]).ravel()
 
+        if(USE_VIOLIN):
+            x = [idx_std] * len(scores_mism)
+            y = scores_mism
+            hue = [0] * len(scores_mism)
+            split = False
+            palette = [c_mm]
+        else:
+            x = [idx_std] * (len(scores_orig)+len(scores_mism))
+            y = np.hstack((scores_orig, scores_mism))
+            hue = np.hstack(([0] * len(scores_orig), [1] * len(scores_mism)))
+            split = True
+            palette = [c_orig,c_mm]
+
         sns.violinplot(ax = ax,
-                   x = [idx_std] * (len(scores_orig)+len(scores_mism)),
-                   y = np.hstack((scores_orig, scores_mism)),
-                   split = True,
-                   hue = np.hstack(([0] * len(scores_orig), [1] * len(scores_mism))),
+                   x = x,
+                   y = y,
+                   split = split,
+                   hue = hue,
                    inner = 'quartile', cut=0,
-                   scale = "width", palette = [c_orig,c_mm], saturation=1.0, linewidth=1.0)
+                   scale = "width", palette = palette, saturation=1.0, linewidth=1.0)
 
         for l in ax.lines[:3]:
-            # l.set_linestyle('--')
-            # l.set_linewidth(0.6)
             l.set_color('white')
-            # l.set_alpha(0.8)
 
         ax.scatter([0.0] * len(outliers_mism), outliers_mism, s=10, color=colors_mismatch[idx_std], marker="o")
-
-        plt.ylim([0.0, 0.2])
-        ax.set_ylim([0.0, 0.2])
-        plt.gca().invert_yaxis()
-        ax.invert_yaxis()
-        ax.get_legend().remove()
-        plt.xlabel('')
-        plt.ylabel('')
-        
-        if (idx_architecture == 0 and idx_std == 0):
-            plt.ylabel('MSE')
-        
-        if (idx_architecture > 0 or idx_std > 0):
-            ax.set_yticks([])
-            plt.axis('off')
-
-        if (idx_std == 1):
-            ax.set_title(label_architectures[idx_architecture])
 
         ax.set_xticks([])
         plt.xticks([])
         ax.set_xlim([-1, 1])
+
+        if(architecture == "bptt" or architecture == "ads_jax_ebn"):
+            scale = 0.4
+            yticks = list(np.linspace(0.0,scale,3))
+            ax.set_ylim([0.0, scale])
+            ax.set_yticks(yticks)
+            ax.invert_yaxis()
+            ax.get_legend().remove()
+            plt.xlabel('')
+            plt.ylabel('')
+            if(idx_std > 0):
+                ax.set_yticks([])
+            if(architecture == "ads_jax_ebn"):
+                plt.axis('off')
+        else:
+            scale = 1.0
+            plt.ylim([0.0, scale])
+            ax.set_ylim([0.0, scale])
+            yticks = list(np.linspace(0.0,scale,3))
+            ax.set_yticks(yticks)
+            plt.gca().invert_yaxis()
+            plt.yticks(yticks)
+            ax.invert_yaxis()
+            ax.get_legend().remove()
+            plt.xlabel('')
+            plt.ylabel('')
+            if(idx_std > 0):
+                ax.set_yticks([])
+            if(idx_std == 0 and idx_architecture == 0):
+                plt.ylabel('MSE')
+            else:
+                ax.set_yticks([])
+                plt.axis('off')
+
+        if (idx_std == 1):
+            ax.set_title(label_architectures[idx_architecture])
 
         fig.add_subplot(ax)
 
@@ -237,7 +268,7 @@ custom_lines = [Line2D([0], [0], color=c_orig, lw=4),
                 Line2D([0], [0], color=colors_mismatch[1], lw=4),
                 Line2D([0], [0], color=colors_mismatch[2], lw=4)]
 
-ax.legend(custom_lines, ["No mismatch", r'5\%', r'20\%', r'30\%'], frameon=False, loc=3, fontsize = 7)
+fig.get_axes()[7].legend(custom_lines, [r'0\%', r'5\%', r'20\%', r'30\%'], frameon=False, loc=3, fontsize = 7)
 
 # show only the outside spines
 for ax in fig.get_axes():

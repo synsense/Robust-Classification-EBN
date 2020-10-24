@@ -87,7 +87,7 @@ In this experiment we analyze the robustness to noise injected directly into the
 Navigate to the folder ```membranePotentialNoise/<architecture>``` and execute ```bash noise_analysis.sh``` to analyze all network instances.
 
 <center>
-<img src=Figures/figure5.png width="600">
+<img src=Figures/membranePotentialNoise.png width="600">
 </center>
 
 ## Acknowledgement

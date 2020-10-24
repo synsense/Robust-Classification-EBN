@@ -33,7 +33,7 @@ label_architectures = ["Reservoir", "FORCE", "BPTT", "Network ADS"]
 keys = ["test_acc","final_out_power","final_out_mse","mfr","dynamics_power","dynamics_mse"]
 keys_bptt = ["test_acc","final_out_mse"]
 keys_reservoir = ["test_acc","final_out_mse","mfr"]
-num_trials = 50
+num_trials = 10
 networks = 10
 
 # - Structure: {"0.05": [dict1,dict2,...,dict50], "0.2":[], "0.3":[]}
@@ -248,93 +248,3 @@ for ax in fig.get_axes():
 
 plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure4_mse.png", dpi=1200)
 plt.show(block=True)
-
-
-
-# # - MSE Plot
-# # - Create second version of the plot using seaborn violin plots
-# fig = plt.figure(figsize=(7.14,3.91))
-# outer = gridspec.GridSpec(1, 3, figure=fig, wspace=0.2)
-
-# outliers = {}
-# for architecture in architectures[:-1]:
-#     outliers[architecture] = {}
-#     for std in mismatch_stds:
-#         outliers[architecture][str(std)] = []
-
-# mse_architectures = ["force", "ads", "ads_fast"]
-# mse_architectures_labels = ["FORCE", "Network ADS", r"Network ADS with $\mathbf{\Omega^f}$"]
-# outliers = {}
-# for architecture in mse_architectures:
-#     outliers[architecture] = {}
-#     for std in mismatch_stds:
-#         outliers[architecture][str(std)] = []
-
-# c_orig = (0, 0.1607, 0.2392, 1.0)
-# colors_mismatch = [(0.9176, 0.8862, 0.71764, 1.0) ,(0.9882, 0.7490, 0.2862, 1.0), (0.8392, 0.1568, 0.1568, 1.0)]
-
-# for idx_architecture, architecture in enumerate(mse_architectures):
-
-#     inner = gridspec.GridSpecFromSubplotSpec(1, 3,
-#                     subplot_spec=outer[idx_architecture], wspace=0.0)
-
-#     for idx_std, mismatch_std in enumerate(mismatch_stds):
-
-#         ax = plt.Subplot(fig, inner[idx_std])
-
-#         scores_orig = np.log10(np.array(data_mse[architecture][0][idx_std,:]))
-#         scores_mism = np.log10(np.array(data_mse[architecture][1][idx_std,:]))
-
-#         # scores_orig = np.array(data_mse[architecture][0][idx_std,:])
-#         # scores_mism = np.array(data_mse[architecture][1][idx_std,:])
-
-#         c_mm = colors_mismatch[idx_std]
-#         c_outlier = colors_mismatch[-1]
-
-#         outliers_mism = np.array([y for stat in boxplot_stats(scores_mism) for y in stat['fliers']])
-#         scores_mism = scores_mism[[(mm != outliers_mism).all() for mm in scores_mism]].ravel()
-
-#         sns.violinplot(ax = ax,
-#                    x = [idx_std] * (len(scores_orig)+len(scores_mism)),
-#                    y = np.hstack((scores_orig, scores_mism)),
-#                    split = True,
-#                    hue = np.hstack(([0] * len(scores_orig), [1] * len(scores_mism))),
-#                    inner = 'quartile', cut=0,
-#                    scale = "width", palette = [c_orig,c_mm], saturation=1.0, linewidth=1.0)
-
-#         for l in ax.lines[:3]:
-#             l.set_color('white')
-
-#         ax.scatter([0.0] * len(outliers_mism), outliers_mism, s=10, color=colors_mismatch[idx_std], marker="o")
-
-#         ax.get_legend().remove()
-        
-#         if(idx_architecture == 0):
-#             ax.set_ylim([0.9,1.3])
-#         else:
-#             ax.set_ylim([0.6,1.3])
-
-#         if(idx_std != 0 or idx_architecture == 2):
-#             ax.set_yticks([])
-#         ax.set_xticks([])
-
-#         if(idx_architecture == 2 or (idx_std > 0)):
-#             ax.spines['left'].set_visible(False)
-
-#         fig.add_subplot(ax)
-
-#         if(idx_std == 1):
-#             ax.set_title(mse_architectures_labels[idx_architecture])
-
-#         # ax.yaxis.set_major_formatter(mticker.StrMethodFormatter("$10^{{{x:.2f}}}$"))
-
-
-# # show only the outside spines
-# for ax in fig.get_axes():
-#     ax.spines['top'].set_visible(False)
-#     ax.spines['bottom'].set_visible(False)
-#     # ax.spines['left'].set_visible(ax.is_first_col())
-#     ax.spines['right'].set_visible(False)
-
-# plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure7.png", dpi=1200)
-# plt.show()

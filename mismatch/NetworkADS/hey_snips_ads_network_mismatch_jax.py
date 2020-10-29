@@ -174,6 +174,10 @@ class HeySnipsNetworkADS(BaseModel):
             reduction=0.9
             layer.weights_fast *= reduction
             layer.weights_slow *= reduction
+        elif(self.mismatch_std == 0.1):
+            reduction = 0.8
+            layer.weights_fast *= reduction
+            layer.weights_slow *= reduction
         elif(self.mismatch_std == 0.2):
             reduction=0.5
             lambda_d = 1/self.ads_layer.tau_mem[0]
@@ -455,10 +459,13 @@ if __name__ == "__main__":
     ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{network_idx}_jax{postfix}_mismatch_analysis_output.json'
 
     if(os.path.exists(ads_orig_final_path)):
-        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
+        # print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        # sys.exit(0)
+        # - Preload previous results
+        with open(ads_orig_final_path, "r") as f:
+            preloaded_final_dict = json.load(f)
 
-    mismatch_stds = [0.05, 0.2, 0.3]
+    mismatch_stds = [0.1]
     
     output_dict = {}
 
@@ -519,10 +526,8 @@ if __name__ == "__main__":
         output_dict[str(mismatch_std)] = mm_output_dicts
 
 
-    print(output_dict['0.05'])
-    print(output_dict['0.2'])
-    print(output_dict['0.3'])
+    preloaded_final_dict['0.1'] = output_dict['0.1']
 
     # - Save
     with open(ads_orig_final_path, 'w') as f:
-        json.dump(output_dict, f)
+        json.dump(preloaded_final_dict, f)

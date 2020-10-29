@@ -275,7 +275,7 @@ if __name__ == "__main__":
     downsample = 200 
     num_filters = 16
     snr = 10.
-    mismatch_stds = [0.05, 0.2, 0.3]
+    mismatch_stds = [0.1]
 
     output_dict = {}
 
@@ -283,8 +283,10 @@ if __name__ == "__main__":
     reservoir_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/reservoir{network_idx}_mismatch_analysis_output.json'
 
     if(os.path.exists(reservoir_orig_final_path)):
-        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        sys.exit(0)
+        # print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        # sys.exit(0)
+        with open(reservoir_orig_final_path, "r") as f:
+            preloaded_final_dict = json.load(f)
 
     for idx,mismatch_std in enumerate(mismatch_stds):
 
@@ -332,13 +334,14 @@ if __name__ == "__main__":
 
         output_dict[str(mismatch_std)] = mm_output_dicts
 
-    print(output_dict['0.05'])
-    print(output_dict['0.2'])
-    print(output_dict['0.3'])
+    # print(output_dict['0.05'])
+    # print(output_dict['0.2'])
+    # print(output_dict['0.3'])
+    preloaded_final_dict['0.1'] = output_dict['0.1']
 
     # - Save
     with open(reservoir_orig_final_path, 'w') as f:
-        json.dump(output_dict, f)
+        json.dump(preloaded_final_dict, f)
 
         
 

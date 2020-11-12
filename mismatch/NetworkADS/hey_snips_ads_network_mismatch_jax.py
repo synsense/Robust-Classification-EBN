@@ -180,11 +180,7 @@ class HeySnipsNetworkADS(BaseModel):
             layer.weights_slow *= reduction
         elif(self.mismatch_std == 0.2):
             reduction=0.5
-            lambda_d = 1/self.ads_layer.tau_mem[0]
-            Ti = (0.0001*lambda_d+0.0005*lambda_d)/2
-            Ti_new = (0.0001*1/layer.tau_mem + 0.0001*(1/layer.tau_mem)**2)/2
-            layer.weights_fast = np.divide(layer.weights_fast, Ti_new/Ti)
-            # layer.weights_fast *= reduction
+            layer.weights_fast *= reduction
             layer.weights_slow *= reduction
         elif(self.mismatch_std == 0.3):
             reduction = 0.2
@@ -230,15 +226,16 @@ class HeySnipsNetworkADS(BaseModel):
                     break
 
                 filtered = np.stack([s[0][1] for s in batch])
-                target_labels = [s[1] for s in batch]
-                tgt_signals = np.stack([s[2] for s in batch])
-                (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
-                spikes_ts, _, states_t_mismatch = vmap(ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(ads_layer_mismatch._pack(), False, batched_spiking_in)
+                (batched_spiking_in, _, batched_rate_output) = self.get_data(filtered_batch=filtered)
+                _, _, states_t_mismatch = vmap(ads_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(ads_layer_mismatch._pack(), False, batched_spiking_in)
                 batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1) @ self.w_out
                 idx_start = int(trial*num_samples)
                 outputs_mismatch[idx_start:int(idx_start+bs),:,:] = batched_output_mismatch
                 for bi in range(batched_output_mismatch.shape[0]):
-                    true_labels.append(target_labels[bi])
+                    predicted_label_rate = 0
+                    if((batched_rate_output[bi] > 0.7).any()):
+                        predicted_label_rate = 1
+                    true_labels.append(predicted_label_rate)
 
         self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
@@ -392,7 +389,6 @@ class HeySnipsNetworkADS(BaseModel):
                     plt.xlim([0.0,5.0])
                     plt.draw()
                     plt.pause(0.001)
-                    # plt.show()
 
                 predicted_label = self.get_prediction(final_out)
                 predicted_label_mismatch = self.get_prediction(final_out_mismatch)
@@ -401,15 +397,15 @@ class HeySnipsNetworkADS(BaseModel):
                 if((batched_rate_output[idx] > 0.7).any()):
                     predicted_label_rate = 1
 
-                if(predicted_label == target_labels[idx]):
+                if(predicted_label == predicted_label_rate):
                     correct += 1
-                if(predicted_label_mismatch == target_labels[idx]):
+                if(predicted_label_mismatch == predicted_label_rate):
                     correct_mismatch += 1
                 if(predicted_label_rate == target_labels[idx]):
                     correct_rate += 1
                 counter += 1
 
-                print(f"MM std: {self.mismatch_std} true label {target_labels[idx]} rate label {predicted_label_rate} orig label {predicted_label} mm label {predicted_label_mismatch}")
+                print(f"MM std: {self.mismatch_std} true label {target_labels[idx]} orig label {predicted_label} rate label {predicted_label_rate} mm label {predicted_label_mismatch}")
 
             # - End batch for loop
         # - End testing loop
@@ -459,13 +455,10 @@ if __name__ == "__main__":
     ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{network_idx}_jax{postfix}_mismatch_analysis_output.json'
 
     if(os.path.exists(ads_orig_final_path)):
-        # print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        # sys.exit(0)
-        # - Preload previous results
-        with open(ads_orig_final_path, "r") as f:
-            preloaded_final_dict = json.load(f)
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
-    mismatch_stds = [0.1]
+    mismatch_stds = [0.05,0.1,0.2]
     
     output_dict = {}
 
@@ -525,9 +518,6 @@ if __name__ == "__main__":
         # - Save the out_dict list in the main dict under the current mismatch level
         output_dict[str(mismatch_std)] = mm_output_dicts
 
-
-    preloaded_final_dict['0.1'] = output_dict['0.1']
-
     # - Save
     with open(ads_orig_final_path, 'w') as f:
-        json.dump(preloaded_final_dict, f)
+        json.dump(output_dict, f)

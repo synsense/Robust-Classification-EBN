@@ -335,12 +335,10 @@ if __name__ == "__main__":
     force_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force{network_idx}_mismatch_analysis_output.json'
 
     if(os.path.exists(force_orig_final_path)):
-        # print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        # sys.exit(0)
-        with open(force_orig_final_path, "r") as f:
-            preloaded_final_dict = json.load(f)
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
-    mismatch_stds = [0.1]
+    mismatch_stds = [0.05,0.1,0.2]
 
     output_dict = {}
 
@@ -393,11 +391,6 @@ if __name__ == "__main__":
 
         output_dict[str(mismatch_std)] = mm_output_dicts
 
-    # print(output_dict['0.05'])
-    # print(output_dict['0.2'])
-    # print(output_dict['0.3'])
-    preloaded_final_dict['0.1'] = output_dict['0.1']
-
     # - Save
     with open(force_orig_final_path, 'w') as f:
-        json.dump(preloaded_final_dict, f)
+        json.dump(output_dict, f)

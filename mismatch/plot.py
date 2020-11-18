@@ -17,6 +17,7 @@ import matplotlib.colors as colors
 import matplotlib.cm as cm
 from matplotlib.lines import Line2D
 from matplotlib import ticker as mticker
+from scipy import stats
 
 USE_VIOLIN = True
 
@@ -28,11 +29,11 @@ absolute_path = os.path.abspath(__file__)
 directory_name = os.path.dirname(absolute_path)
 os.chdir(directory_name)
 
-mismatch_stds = [0.05, 0.2, 0.3]
+mismatch_stds = [0.05, 0.1, 0.2]
 architectures = ["reservoir","force", "bptt", "ads_jax_ebn"]
 label_architectures = ["Reservoir", "FORCE", "BPTT", "Network ADS"]
-architectures = ["force", "bptt", "ads_jax_ebn"]
-label_architectures = ["FORCE", "BPTT", "Network ADS"]
+# architectures = ["force", "bptt", "ads_jax_ebn"]
+# label_architectures = ["FORCE", "BPTT", "Network ADS"]
 keys = ["test_acc","final_out_power","final_out_mse","mfr","dynamics_power","dynamics_mse"]
 keys_bptt = ["test_acc","final_out_mse"]
 keys_reservoir = ["test_acc","final_out_mse","mfr"]
@@ -156,7 +157,7 @@ custom_lines = [Line2D([0], [0], color=c_orig, lw=4),
                 Line2D([0], [0], color=colors_mismatch[1], lw=4),
                 Line2D([0], [0], color=colors_mismatch[2], lw=4)]
 
-ax.legend(custom_lines, ["No mismatch", r'5\%', r'20\%', r'30\%'], frameon=False, loc=3, fontsize = 7)
+fig.get_axes()[9].legend(custom_lines, ["No mismatch", r'5\%', r'10\%', r'20\%'], frameon=False, loc=3, fontsize = 7)
 
 # show only the outside spines
 for ax in fig.get_axes():
@@ -178,7 +179,7 @@ colors_mismatch = [(0.9176, 0.8862, 0.71764, 1.0) ,(0.9882, 0.7490, 0.2862, 1.0)
 
 for idx_architecture, architecture in enumerate(architectures):
 
-    inner = gridspec.GridSpecFromSubplotSpec(1, 3,
+    inner = gridspec.GridSpecFromSubplotSpec(1, 4,
                     subplot_spec=outer[idx_architecture], wspace=0.0)
 
     for idx_std, mismatch_std in enumerate(mismatch_stds):
@@ -225,6 +226,10 @@ for idx_architecture, architecture in enumerate(architectures):
         plt.xticks([])
         ax.set_xlim([-1, 1])
 
+        mean_mse = np.mean(np.array(data_all[idx_architecture]['orig']['final_out_mse']))
+        if(idx_std == 0):
+            ax.axhline(y=mean_mse, color=c_orig, linestyle="dotted", linewidth=2)
+
         if(architecture == "bptt" or architecture == "ads_jax_ebn"):
             scale = 0.4
             yticks = list(np.linspace(0.0,scale,3))
@@ -238,8 +243,19 @@ for idx_architecture, architecture in enumerate(architectures):
                 ax.set_yticks([])
             if(architecture == "ads_jax_ebn"):
                 plt.axis('off')
-        else:
+        elif(architecture == "force"):
             scale = 1.0
+            ax.set_ylim([0.0, scale])
+            yticks = list(np.linspace(0.0,scale,3))
+            ax.set_yticks(yticks)
+            ax.invert_yaxis()
+            ax.get_legend().remove()
+            plt.xlabel('')
+            plt.ylabel('')
+            if(idx_std > 0):
+                ax.set_yticks([])
+        else:
+            scale = 150.0
             plt.ylim([0.0, scale])
             ax.set_ylim([0.0, scale])
             yticks = list(np.linspace(0.0,scale,3))
@@ -268,7 +284,7 @@ custom_lines = [Line2D([0], [0], color=c_orig, lw=4),
                 Line2D([0], [0], color=colors_mismatch[1], lw=4),
                 Line2D([0], [0], color=colors_mismatch[2], lw=4)]
 
-fig.get_axes()[7].legend(custom_lines, [r'0\%', r'5\%', r'20\%', r'30\%'], frameon=False, loc=3, fontsize = 7)
+fig.get_axes()[10].legend(custom_lines, [r'0\%', r'5\%', r'10\%', r'20\%'], frameon=False, loc=3, fontsize = 7)
 
 # show only the outside spines
 for ax in fig.get_axes():
@@ -279,3 +295,18 @@ for ax in fig.get_axes():
 
 plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure4_mse.png", dpi=1200)
 plt.show(block=True)
+
+# - Statistical analysis of the medians of MSEs
+crossed = np.zeros((len(architectures),len(architectures)))
+print("A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for mismatch_std in mismatch_stds:
+            p_value = stats.median_test(data_all[i][str(mismatch_std)]['final_out_mse'],data_all[j][str(mismatch_std)]['final_out_mse'])[1]
+            p_value_mw = stats.mannwhitneyu(data_all[i][str(mismatch_std)]['final_out_mse'],data_all[j][str(mismatch_std)]['final_out_mse'])[1]
+            # print(f"MSE Median {architectures[i]} {np.median(data_all[i][str(mismatch_std)]['final_out_mse'])} Median {architectures[j]} {np.median(data_all[j][str(mismatch_std)]['final_out_mse'])} P-Value {p_value} P-Value-Mann-Whitney {p_value_mw}")
+            print("%s/%s \t\t %.4f \t %.4f \t %.3E" % (label_architectures[i],label_architectures[j],np.median(data_all[i][str(mismatch_std)]['final_out_mse']),np.median(data_all[j][str(mismatch_std)]['final_out_mse']),p_value_mw))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()

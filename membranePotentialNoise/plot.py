@@ -12,6 +12,7 @@ from matplotlib.cbook import boxplot_stats
 from scipy.interpolate import interp1d
 from scipy.ndimage.filters import gaussian_filter1d
 from copy import copy
+from scipy import stats
 
 architectures = ["force", "reservoir", "bptt", "ads_jax_ebn", "ads_jax"]
 architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS", "Network ADS No EBN"]
@@ -105,3 +106,28 @@ ax2.spines["right"].set_visible(False)
 plt.plot()
 plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/membranePotentialNoise.png", dpi=1200)
 plt.show()
+
+# - Statistical tests
+crossed = np.zeros((len(architectures),len(architectures)))
+print("A1/A2 \t\t Median Acc A1 \t Median Acc A2 \t P-Value (Mann-Whitney-U) \t Noise $\\sigma$ ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for idx,std in enumerate(dkeys):
+            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["test_acc"][std],data_full[architectures[j]]["test_acc"][std])[1]
+            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["test_acc"][std]),np.median(data_full[architectures[j]]["test_acc"][std]),p_value_mw,std))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()
+
+crossed = np.zeros((len(architectures),len(architectures)))
+print("A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) \t Noise $\\sigma$ ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for idx,std in enumerate(dkeys):
+            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["final_out_mse"][std],data_full[architectures[j]]["final_out_mse"][std])[1]
+            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["final_out_mse"][std]),np.median(data_full[architectures[j]]["final_out_mse"][std]),p_value_mw,std))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()

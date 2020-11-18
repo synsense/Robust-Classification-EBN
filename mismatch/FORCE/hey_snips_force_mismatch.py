@@ -182,13 +182,16 @@ class HeySnipsNetworkFORCE(BaseModel):
                 filtered = np.stack([s[0][1] for s in batch])
                 target_labels = [s[1] for s in batch]
                 tgt_signals = np.stack([s[2] for s in batch])
-                (batched_spiking_in, _, _) = self.get_data(filtered_batch=filtered)
+                (batched_spiking_in, _, batched_rate_output) = self.get_data(filtered_batch=filtered)
                 _, _, states_t_mismatch = vmap(force_layer_mismatch._evolve_functional, in_axes=(None, None, 0))(force_layer_mismatch._pack(), False, batched_spiking_in)
                 batched_output_mismatch = np.squeeze(np.array(states_t_mismatch["output_ts"]), axis=-1) @ self.w_out
                 idx_start = int(trial*num_samples)
                 outputs_mismatch[idx_start:int(idx_start+bs),:,:] = batched_output_mismatch
                 for bi in range(batched_output_mismatch.shape[0]):
-                    true_labels.append(target_labels[bi])
+                    predicted_label_rate = 0
+                    if((batched_rate_output[bi] > 0.7).any()):
+                        predicted_label_rate = 1
+                    true_labels.append(predicted_label_rate)
 
         self.mismatch_gain = self.find_gain(true_labels, outputs_mismatch)
 
@@ -276,9 +279,9 @@ class HeySnipsNetworkFORCE(BaseModel):
                 if(np.any(batched_rate_output[idx] > 0.7)):
                     predicted_rate_label = 1
 
-                if(predicted_label == target_labels[idx]):
+                if(predicted_label == predicted_rate_label):
                     correct += 1
-                if(predicted_label_mismatch == target_labels[idx]):
+                if(predicted_label_mismatch == predicted_rate_label):
                     correct_mismatch += 1
                 if(predicted_rate_label == target_labels[idx]):
                     correct_rate += 1
@@ -332,12 +335,10 @@ if __name__ == "__main__":
     force_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/force{network_idx}_mismatch_analysis_output.json'
 
     if(os.path.exists(force_orig_final_path)):
-        # print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
-        # sys.exit(0)
-        with open(force_orig_final_path, "r") as f:
-            preloaded_final_dict = json.load(f)
+        print("Exiting because data was already generated. Uncomment this line to reproduce the results.")
+        sys.exit(0)
 
-    mismatch_stds = [0.1]
+    mismatch_stds = [0.05,0.1,0.2]
 
     output_dict = {}
 
@@ -390,11 +391,6 @@ if __name__ == "__main__":
 
         output_dict[str(mismatch_std)] = mm_output_dicts
 
-    # print(output_dict['0.05'])
-    # print(output_dict['0.2'])
-    # print(output_dict['0.3'])
-    preloaded_final_dict['0.1'] = output_dict['0.1']
-
     # - Save
     with open(force_orig_final_path, 'w') as f:
-        json.dump(preloaded_final_dict, f)
+        json.dump(output_dict, f)

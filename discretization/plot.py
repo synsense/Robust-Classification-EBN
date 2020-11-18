@@ -12,11 +12,13 @@ from matplotlib.cbook import boxplot_stats
 from scipy.interpolate import interp1d
 from scipy.ndimage.filters import gaussian_filter1d
 from copy import copy
+from scipy import stats
 
 architectures = ["force", "reservoir", "bptt", "ads_jax_ebn"]
 architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS"]
 keys = ["test_acc", "final_out_mse"]
 dkeys = ["full", "2", "3", "4", "5", "6"]
+label_precision = ["Full", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits"]
 
 networks = 10
 
@@ -121,8 +123,34 @@ ax2.set_ylabel("MSE")
 ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
 
-
-
 plt.plot()
 plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/discretization.png", dpi=1200)
 plt.show()
+
+
+# - Statistical tests
+crossed = np.zeros((len(architectures),len(architectures)))
+print("A1/A2 \t\t Median Acc A1 \t Median Acc A2 \t P-Value (Mann-Whitney-U) \t Precision ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for idx,precision in enumerate(dkeys):
+            prec = label_precision[idx]
+            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["test_acc"][precision],data_full[architectures[j]]["test_acc"][precision])[1]
+            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["test_acc"][precision]),np.median(data_full[architectures[j]]["test_acc"][precision]),p_value_mw,prec))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()
+
+crossed = np.zeros((len(architectures),len(architectures)))
+print("A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) \t Precision ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for idx,precision in enumerate(dkeys):
+            prec = label_precision[idx]
+            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["final_out_mse"][precision],data_full[architectures[j]]["final_out_mse"][precision])[1]
+            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["final_out_mse"][precision]),np.median(data_full[architectures[j]]["final_out_mse"][precision]),p_value_mw,prec))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()

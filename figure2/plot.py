@@ -18,24 +18,18 @@ duration = 5.0
 
 with open('Resources/Plotting/target_dynamics.npy', 'rb') as f:
     target_val = np.load(f).T
-    print("target_val",target_val.shape)
 with open('Resources/Plotting/target_signal.npy', 'rb') as f:
     target_signal = np.load(f).ravel()
-    print("target_val",target_val.shape)
 with open('Resources/Plotting/recon_dynamics.npy', 'rb') as f:
     out_val = np.load(f).T
     time_dynamics = np.arange(0,duration,duration/out_val.shape[0])
-    print("out_val",out_val.shape)
 with open('Resources/Plotting/rate_output.npy', 'rb') as f:
     rate_output = np.load(f)
-    print("rate_output",rate_output.shape)
 with open('Resources/Plotting/spiking_output.npy', 'rb') as f:
     final_out = np.load(f)
-    print("final_out",final_out.shape)
 with open('Resources/Plotting/audio_raw.npy', 'rb') as f:
     audio_raw = np.load(f)
     times_audio_raw = np.arange(0,duration,duration/len(audio_raw))
-    print('audio_raw',audio_raw.shape)
 # - Create time base
 with open('Resources/Plotting/filtered_audio.npy', 'rb') as f:
     filtered = 5*np.load(f)
@@ -46,13 +40,10 @@ with open('Resources/Plotting/filtered_audio.npy', 'rb') as f:
     filtered[:,:plot_num] += stagger_filtered
     filtered = filtered[:,:plot_num]
     filtered_times = np.arange(0,duration,duration/filtered.shape[0])
-    print("filtered",filtered.shape)
 with open('Resources/Plotting/rate_output_false.npy', 'rb') as f:
     rate_output_false = np.load(f)
-    print("rate_out_false",rate_output_false.shape)
 with open('Resources/Plotting/spiking_output_false.npy', 'rb') as f:
     final_out_false = np.load(f)
-    print("final_out_false",final_out_false.shape)
 with open('Resources/Plotting/spike_channels.npy', 'rb') as f:
     spike_channels = np.load(f)
 with open('Resources/Plotting/spike_times.npy', 'rb') as f:

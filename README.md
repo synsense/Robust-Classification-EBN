@@ -78,7 +78,7 @@ The folder contains sub-folders for each architecture. Each sub-folder contains 
 The mismatch analysis is carried out for each network instance to ensure statistical correctness and can be carried out by executing ```bash mismatch_analysis.sh``` for each architecture.
 
 <center>
-<img src=Figures/figure4_mse.png width="600">
+<img src=Figures/figure4.png width="600">
 </center>
 
 ### Injected Noise

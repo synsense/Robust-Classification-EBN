@@ -105,10 +105,13 @@ class TemporalXORNetwork:
             weights_out_realistic = D_realistic.T
             v_reset_target = b - a
             noise_std_realistic = 0.00
+            weights_fast = (D.T@D + mu*lambda_d**2*np.eye(self.num_neurons))
+            np.fill_diagonal(weights_fast, 0)
+            weights_fast_realistic = -0.5*np.divide(weights_fast.T, v_thresh.ravel()).T
 
             self.ads_layer = JaxADS(weights_in = weights_in_realistic * self.tau_mem,
-                                    weights_out = 0.5*weights_out_realistic,
-                                    weights_fast = np.zeros((self.num_neurons,self.num_neurons)),
+                                    weights_out = weights_out_realistic * self.tau_mem,
+                                    weights_fast = weights_fast_realistic,
                                     weights_slow = np.zeros((self.num_neurons,self.num_neurons)),
                                     eta = eta,
                                     k = k,
@@ -417,8 +420,8 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', default=10, type=int, help="Number of training epochs")
     parser.add_argument('--samples-per-epoch', default=100, type=int, help="Number of training samples per epoch")
     parser.add_argument('--eta', default=0.0001, type=float, help="Learning rate")
-    parser.add_argument('--num-val', default=10, type=int, help="Number of validation samples")
-    parser.add_argument('--num-test', default=1000, type=int, help="Number of test samples")
+    parser.add_argument('--num-val', default=50, type=int, help="Number of validation samples")
+    parser.add_argument('--num-test', default=200, type=int, help="Number of test samples")
 
     args = vars(parser.parse_args())
     num = args['num']

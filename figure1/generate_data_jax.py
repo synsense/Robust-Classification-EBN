@@ -166,6 +166,7 @@ class TemporalXORNetwork:
                 with open(fn, 'wb') as f:
                     np.save(f, times) 
                 
+                print(f"Input label {input_label}")
                 recorded[input_label] = 1
 
             plt.clf()

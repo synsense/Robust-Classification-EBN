@@ -205,7 +205,7 @@ class TemporalXORNetwork:
                 batched_output = self.ads_layer.train_output_target(ts_input=spiking_in,
                                                                         ts_target=rate_net_target_dynamics,
                                                                         eta=0.000005,
-                                                                        k=f_k(num_signal_iterations),
+                                                                        k=100,
                                                                         num_timesteps=spiking_in.shape[1])
 
                 for idx in range(batched_output.shape[0]):

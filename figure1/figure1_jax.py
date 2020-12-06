@@ -30,7 +30,6 @@ class TemporalXORNetwork:
                  num_test,
                  num_epochs,
                  samples_per_epoch,
-                 eta,
                  verbose=0):
 
         self.verbose = verbose
@@ -79,6 +78,8 @@ class TemporalXORNetwork:
             self.ads_layer = self.load(self.model_path_ads_net)
             self.tau_mem = self.ads_layer.tau_mem[0]
             self.Nc = self.ads_layer.weights_in.shape[0]
+            self.best_val_acc = 0.5
+            self.best_val_err = 1.0
         else:
             self.Nc = self.num_rate_neurons
             self.num_neurons = num_neurons
@@ -93,8 +94,6 @@ class TemporalXORNetwork:
             mu = 0.0005
             nu = 0.0001
             D = np.random.randn(self.Nc,self.num_neurons) / self.Nc
-            eta = eta
-            k = 10 / self.tau_mem
             v_thresh = (nu * lambda_d + mu * lambda_d**2 + np.sum(abs(D.T), -1, keepdims = True)**2) / 2
             v_thresh_target = 1.0*np.ones((self.num_neurons,)) # - V_thresh
             v_rest_target = 0.5*np.ones((self.num_neurons,)) # - V_rest = b
@@ -113,8 +112,8 @@ class TemporalXORNetwork:
                                     weights_out = weights_out_realistic * self.tau_mem,
                                     weights_fast = weights_fast_realistic,
                                     weights_slow = np.zeros((self.num_neurons,self.num_neurons)),
-                                    eta = eta,
-                                    k = k,
+                                    eta = 0.000001,
+                                    k = 75,
                                     noise_std = noise_std_realistic,
                                     dt = self.dt,
                                     bias = 0,
@@ -129,6 +128,7 @@ class TemporalXORNetwork:
             
 
             self.best_val_acc = 0.0
+            self.best_val_err = 1.0
         # - End else create network
 
         self.best_model = self.ads_layer
@@ -160,29 +160,6 @@ class TemporalXORNetwork:
         if(self.verbose > 0):
             plt.figure(figsize=(8,5))
 
-        # Create step schedule for k
-        step_size = self.ads_layer.k / 8
-        total_num_iter = self.samples_per_epoch*self.num_epochs
-        k_of_t = k_step_function(total_num_iter=self.samples_per_epoch*self.num_epochs,
-                                    step_size=step_size,
-                                    start_k = self.ads_layer.k)
-        if(total_num_iter > 0):
-            f_k = lambda t : np.maximum(step_size,k_of_t[t])
-            if(self.verbose > 1):
-                plt.plot(np.arange(0,total_num_iter),f_k(np.arange(0,total_num_iter))); plt.title("Decay schedule for k"); plt.show()
-        else:
-            f_k = lambda t : 0
-
-        # - Create schedule for eta
-        a_eta = self.ads_layer.eta
-        b_eta = (total_num_iter/2) / np.log(100)
-        c_eta = 0.0000001
-        f_eta = lambda t,a_eta,b_eta : a_eta*np.exp(-t/b_eta) + c_eta
-
-        if(self.verbose > 1):
-            plt.plot(np.arange(0,total_num_iter),f_eta(np.arange(0,total_num_iter),a_eta,b_eta))
-            plt.title("Decay schedule for eta"); plt.legend(); plt.show()
-
         time_horizon = 50
         recon_erros = np.ones((time_horizon,))
         avg_training_acc = np.zeros((time_horizon,)); avg_training_acc[:int(time_horizon/2)] = 1.0
@@ -204,8 +181,8 @@ class TemporalXORNetwork:
 
                 batched_output = self.ads_layer.train_output_target(ts_input=spiking_in,
                                                                         ts_target=rate_net_target_dynamics,
-                                                                        eta=0.000005,
-                                                                        k=100,
+                                                                        eta=0.000001,
+                                                                        k=75,
                                                                         num_timesteps=spiking_in.shape[1])
 
                 for idx in range(batched_output.shape[0]):
@@ -235,6 +212,7 @@ class TemporalXORNetwork:
                     elif((final_out < -0.5).any()):
                         predicted_label = 0
                     else:
+                        # - The target response did not cross a threshold and automatically counts as a misclassification
                         predicted_label = -1
 
                     if(tgt_label == predicted_label):
@@ -254,11 +232,11 @@ class TemporalXORNetwork:
 
                 num_signal_iterations += 1
 
-            # Validate at the end of the epoch
-            val_acc, _ = self.perform_validation_set()
+            # - Validate at the end of the epoch
+            _, val_err = self.perform_validation_set()
 
-            if(val_acc >= self.best_val_acc):
-                self.best_val_acc = val_acc
+            if(val_err < self.best_val_err):
+                self.best_val_err = val_err
                 # - Save in temporary file
                 self.save(self.model_path_ads_net)
 
@@ -329,7 +307,7 @@ class TemporalXORNetwork:
 
         rate_acc = same_as_rate / counter
         val_acc = correct / counter
-        print("Validation accuracy is %.3f | Compared to rate is %.3f" % (val_acc, rate_acc),flush=True)
+        print("Acg. reconstruction is %.3f | Validation accuracy is %.3f | Compared to rate is %.3f" % (np.mean(errors), val_acc, rate_acc),flush=True)
 
         return (val_acc, np.mean(np.asarray(errors)))
 
@@ -413,14 +391,13 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Learn classifier using pre-trained rate network')
     
-    parser.add_argument('--num', default=384, type=int, help="Number of neurons in the network")
+    parser.add_argument('--num', default=320, type=int, help="Number of neurons in the network")
     parser.add_argument('--verbose', default=0, type=int, help="Level of verbosity. Default=0. Range: 0 to 2")
     parser.add_argument('--tau-slow', default=0.07, type=float, help="Time constant of slow recurrent synapses")
     parser.add_argument('--tau-out', default=0.07, type=float, help="Synaptic time constant of output synapses")
-    parser.add_argument('--epochs', default=10, type=int, help="Number of training epochs")
-    parser.add_argument('--samples-per-epoch', default=100, type=int, help="Number of training samples per epoch")
-    parser.add_argument('--eta', default=0.0001, type=float, help="Learning rate")
-    parser.add_argument('--num-val', default=50, type=int, help="Number of validation samples")
+    parser.add_argument('--epochs', default=20, type=int, help="Number of training epochs")
+    parser.add_argument('--samples-per-epoch', default=500, type=int, help="Number of training samples per epoch")
+    parser.add_argument('--num-val', default=200, type=int, help="Number of validation samples")
     parser.add_argument('--num-test', default=200, type=int, help="Number of test samples")
 
     args = vars(parser.parse_args())
@@ -430,7 +407,6 @@ if __name__ == "__main__":
     tau_out = args['tau_out']
     num_epochs = args['epochs']
     samples_per_epoch = args['samples_per_epoch']
-    eta = args['eta']
     num_val = args['num_val']
     num_test = args['num_test']
 
@@ -441,7 +417,6 @@ if __name__ == "__main__":
                                 num_test=num_test,
                                 num_epochs=num_epochs,
                                 samples_per_epoch=samples_per_epoch,
-                                eta=eta,
                                 verbose=verbose)
 
     model.train()

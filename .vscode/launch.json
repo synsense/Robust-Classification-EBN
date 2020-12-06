@@ -1,0 +1,38 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["--verbose=0", "--network-idx=8", "--use-ebn", "--num-trials=1"],
+            "console": "integratedTerminal"
+        },{
+            "name": "XOR",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["--verbose=0", "--num=384", "--tau-slow=0.07", "--tau-out=0.07", "--epochs=20"],
+            "console": "integratedTerminal"
+        }
+        ,{
+            "name": "Discretization",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["--verbose", "1", "--network-idx", "7", "--seed", "7"],
+            "console": "integratedTerminal"
+        },{
+            "name": "Lipschitzness",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": ["--num-neurons","1024","--verbose", "1","--learning-rate", "1e-7", "--lipschitzness", "--step-size", "0.001"],
+            "console": "integratedTerminal"
+        }
+    ]
+}

@@ -36,7 +36,7 @@ for architecture in architectures:
 
 for architecture in architectures:
     for i in range(networks):
-        fn = f"/home/julian/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/{architecture}{i}_discretization_out.json"
+        fn = f"{architecture}{i}_discretization_out.json"
         if(os.path.exists(fn)):
             with open(fn, "rb") as f:
                 data = json.load(f)
@@ -124,7 +124,7 @@ ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
 
 plt.plot()
-plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/discretization.png", dpi=1200)
+plt.savefig("../Figures/quantisation.pdf", dpi=1200)
 plt.show()
 
 

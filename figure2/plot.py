@@ -147,5 +147,5 @@ ax4.set_xticks([])
 ax4.set_yticks([])
 ax4.text(x=t_start+0.01, y=0.9, s="e", fontsize=16, fontweight="bold")
 
-plt.savefig("figure2.pdf", dpi=1200)
+plt.savefig("../Figures/audio_task.pdf", dpi=1200)
 plt.show()

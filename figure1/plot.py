@@ -164,5 +164,5 @@ ax2.plot([0.0,0.1], [-.9,-.9], color="k", linewidth=2)
 ax2.text(x=0.01, y=-1.5, s="100 ms")
 ax2.text(x=0.01, y=10.5, s="a", fontsize=16, fontweight="bold")
 
-plt.savefig(f"figure1.pdf", dpi=1200)
+plt.savefig(f"../Figures/temporal_xor_task.pdf", dpi=1200)
 plt.show()

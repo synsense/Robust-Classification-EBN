@@ -330,5 +330,5 @@ ax12.plot([t_stop_suppress,t_stop_suppress],[-1, 10.0], color="r", linewidth=1)
 ax12.set_ylim([-3.0,11.0])
 ax12.axis('off')
 
-plt.savefig("figure3.pdf", dpi=1200)
+plt.savefig("../Figures/noise_sources.pdf", dpi=1200)
 plt.show()

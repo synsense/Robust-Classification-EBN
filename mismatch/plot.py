@@ -63,9 +63,9 @@ for architecture in architectures:
     data_all_networks = initialize_dict(architecture, architecture != "ads_jax_ebn" and architecture != "bptt" and architecture != "force" and architecture != "reservoir")
     for network_idx in range(networks):
         # - Load the dictionary
-        fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/{architecture}{str(network_idx)}_mismatch_analysis_output.json"
+        fp = f"{architecture}{str(network_idx)}_mismatch_analysis_output.json"
         if(architecture == "ads_jax_ebn"):
-            fp = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{str(network_idx)}_jax_ebn_mismatch_analysis_output.json"
+            fp = f"{str(network_idx)}_jax_ebn_mismatch_analysis_output.json"
         
         if(architecture == "bptt"):
             local_keys = keys_bptt
@@ -212,7 +212,7 @@ for ax in fig.get_axes():
     ax.spines['left'].set_visible(ax.is_first_col())
     ax.spines['right'].set_visible(False)
 
-plt.savefig("/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure4.png", dpi=1200)
+plt.savefig("../Figures/figure4.pdf", dpi=1200)
 plt.show(block=True)
 
 # - Statistical analysis of the medians of MSEs

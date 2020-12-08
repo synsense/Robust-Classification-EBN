@@ -13,6 +13,7 @@ from scipy.interpolate import interp1d
 from scipy.ndimage.filters import gaussian_filter1d
 from copy import copy
 from scipy import stats
+import pathlib as pl
 
 architectures = ["force", "reservoir", "bptt", "ads_jax_ebn"]
 architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS"]
@@ -21,6 +22,10 @@ dkeys = ["full", "2", "3", "4", "5", "6"]
 label_precision = ["Full", "2 bits", "3 bits", "4 bits", "5 bits", "6 bits"]
 
 networks = 10
+
+absolute_path = os.path.abspath(__file__)
+directory_name = os.path.dirname(absolute_path)
+os.chdir(directory_name)
 
 def remove_outliers(x):
     outliers = [y for stat in boxplot_stats(x) for y in stat['fliers']]
@@ -36,13 +41,18 @@ for architecture in architectures:
 
 for architecture in architectures:
     for i in range(networks):
-        fn = f"{architecture}{i}_discretization_out.json"
+        fn = pl.Path("Resources", "Plotting", f"{architecture}{i}_discretization_out.json")
+        
         if(os.path.exists(fn)):
             with open(fn, "rb") as f:
                 data = json.load(f)
                 for key in keys:
                     for idx,dkey in enumerate(dkeys):
                         data_full[architecture][key][dkey].append(data[key][idx])
+                        
+        else:
+             print(f"ERROR missing file: {fn}")
+
     for dkey in dkeys:
         data_full[architecture]["final_out_mse"][dkey] = remove_outliers(data_full[architecture]["final_out_mse"][dkey])
     

@@ -261,7 +261,7 @@ for i,architecture in enumerate(architectures):
         
 # - Statistical analysis of MSE drops
 crossed = np.zeros((len(architectures),len(architectures)))
-print("mismatch : Arch \t Base med. MSE \t Mism. MSE \t MSE drop% \t P-Value (Mann-Whitney-U) ")
+print("mismatch : \t Arch \t Base med. MSE \t Mism. MSE \t MSE drop% \t P-Value (Mann-Whitney-U) ")
 for i, architecture in enumerate(architectures):
     for mismatch_std in mismatch_stds:
         data_orig = data_all[i]['orig']['final_out_mse']

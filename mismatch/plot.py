@@ -5,7 +5,7 @@ import ujson as json
 import os
 import matplotlib
 matplotlib.rc('font', family='Sans-Serif')
-matplotlib.rc('text', usetex=True)
+matplotlib.rc('text', usetex=False)
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
@@ -19,6 +19,8 @@ from matplotlib.lines import Line2D
 from matplotlib import ticker as mticker
 from scipy import stats
 
+import pathlib as pl
+
 USE_VIOLIN = True
 
 def generate_random_data():
@@ -28,6 +30,9 @@ def generate_random_data():
 absolute_path = os.path.abspath(__file__)
 directory_name = os.path.dirname(absolute_path)
 os.chdir(directory_name)
+
+bp = pl.Path('Resources', 'Plotting')
+print(f"Base path: {bp}")
 
 mismatch_stds = [0.05, 0.1, 0.2]
 architectures = ["reservoir","force", "bptt", "ads_jax_ebn"]
@@ -63,9 +68,9 @@ for architecture in architectures:
     data_all_networks = initialize_dict(architecture, architecture != "ads_jax_ebn" and architecture != "bptt" and architecture != "force" and architecture != "reservoir")
     for network_idx in range(networks):
         # - Load the dictionary
-        fp = f"{architecture}{str(network_idx)}_mismatch_analysis_output.json"
+        fp = bp / f"{architecture}{str(network_idx)}_mismatch_analysis_output.json"
         if(architecture == "ads_jax_ebn"):
-            fp = f"{str(network_idx)}_jax_ebn_mismatch_analysis_output.json"
+            fp = bp / f"ads{str(network_idx)}_jax_ebn_mismatch_analysis_output.json"
         
         if(architecture == "bptt"):
             local_keys = keys_bptt
@@ -78,7 +83,7 @@ for architecture in architectures:
             with open(fp, 'r') as f:
                 tmp = json.load(f)
         else:
-            break
+            print(f"ERROR: Path not found: {fp}")
         for mismatch_std in mismatch_stds:
             for key in local_keys:
                 for trial in range(num_trials):
@@ -175,8 +180,8 @@ for idx_architecture, architecture in enumerate(architectures):
                 ax.set_yticks([])
         else:
             scale = 150.0
-            plt.ylim([0.0, scale])
-            ax.set_ylim([0.0, scale])
+            plt.ylim([0, scale])
+            ax.set_ylim([0, scale])
             yticks = list(np.linspace(0.0,scale,3))
             ax.set_yticks(yticks)
             plt.gca().invert_yaxis()
@@ -203,7 +208,7 @@ custom_lines = [Line2D([0], [0], color=c_orig, lw=4),
                 Line2D([0], [0], color=colors_mismatch[1], lw=4),
                 Line2D([0], [0], color=colors_mismatch[2], lw=4)]
 
-fig.get_axes()[10].legend(custom_lines, [r'0\%', r'5\%', r'10\%', r'20\%'], frameon=False, loc=3, fontsize = 7)
+fig.get_axes()[10].legend(custom_lines, [r'0%', r'5%', r'10%', r'20%'], frameon=False, loc=3, fontsize = 7)
 
 # show only the outside spines
 for ax in fig.get_axes():
@@ -212,20 +217,58 @@ for ax in fig.get_axes():
     ax.spines['left'].set_visible(ax.is_first_col())
     ax.spines['right'].set_visible(False)
 
-plt.savefig("../Figures/figure4.pdf", dpi=1200)
+plt.tight_layout()
+plt.savefig("../Figures/mismatch_comparison.pdf", dpi=1200)
 plt.show(block=True)
 
 # - Statistical analysis of the medians of MSEs
 crossed = np.zeros((len(architectures),len(architectures)))
-print("A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) ")
+print("mismatch \t\t A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
         if(i == j): continue
         if(crossed[i,j] == 1): continue
         for mismatch_std in mismatch_stds:
-            p_value = stats.median_test(data_all[i][str(mismatch_std)]['final_out_mse'],data_all[j][str(mismatch_std)]['final_out_mse'])[1]
-            p_value_mw = stats.mannwhitneyu(data_all[i][str(mismatch_std)]['final_out_mse'],data_all[j][str(mismatch_std)]['final_out_mse'])[1]
-            # print(f"MSE Median {architectures[i]} {np.median(data_all[i][str(mismatch_std)]['final_out_mse'])} Median {architectures[j]} {np.median(data_all[j][str(mismatch_std)]['final_out_mse'])} P-Value {p_value} P-Value-Mann-Whitney {p_value_mw}")
-            print("%s/%s \t\t %.4f \t %.4f \t %.3E" % (label_architectures[i],label_architectures[j],np.median(data_all[i][str(mismatch_std)]['final_out_mse']),np.median(data_all[j][str(mismatch_std)]['final_out_mse']),p_value_mw))
+            data_a1 = data_all[i][str(mismatch_std)]['final_out_mse']
+            data_a2 = data_all[j][str(mismatch_std)]['final_out_mse']
+            
+            p_value = stats.median_test(data_a1, data_a2)[1]
+            p_value_mw = stats.mannwhitneyu(data_a1, data_a2)[1]
+            
+            print("%4s %12s/%12s \t\t %.4f \t %.4f \t %.3E" % (str(mismatch_std), label_architectures[i], label_architectures[j], np.median(data_a1), np.median(data_a2), p_value_mw))
         crossed[i,j] = 1; crossed[j,i] = 1
         print()
+        
+
+# - Statistical analysis of the variance of MSEs
+crossed = np.zeros((len(architectures),len(architectures)))
+print("mismatch : A1/A2 \t\t Std.dev MSE A1 \t Std.dev MSE A2 \t P-Value (Levene) ")
+for i,architecture in enumerate(architectures):
+    for j,architecture in enumerate(architectures):
+        if(i == j): continue
+        if(crossed[i,j] == 1): continue
+        for mismatch_std in mismatch_stds:
+            data_a1 = data_all[i][str(mismatch_std)]['final_out_mse']
+            data_a2 = data_all[j][str(mismatch_std)]['final_out_mse']
+            
+            p_value = stats.levene(data_a1, data_a2)[1]
+            
+            print("%4s %12s/%12s \t\t %.4f \t %.4f \t %.3E" % (str(mismatch_std), label_architectures[i], label_architectures[j], np.std(data_a1), np.std(data_a2), p_value))
+        crossed[i,j] = 1; crossed[j,i] = 1
+        print()
+        
+
+        
+# - Statistical analysis of MSE drops
+crossed = np.zeros((len(architectures),len(architectures)))
+print("mismatch : Arch \t Base med. MSE \t Mism. MSE \t MSE drop% \t P-Value (Mann-Whitney-U) ")
+for i, architecture in enumerate(architectures):
+    for mismatch_std in mismatch_stds:
+        data_orig = data_all[i]['orig']['final_out_mse']
+        data_mismatch = data_all[i][str(mismatch_std)]['final_out_mse']
+        
+        p_value = stats.median_test(data_orig, data_mismatch)[1]
+        p_value_mw = stats.mannwhitneyu(data_orig, data_mismatch)[1]
+        
+        print("%4s %12s \t %.4f \t %.4f \t %.4f \t %.3E" % (str(mismatch_std), label_architectures[i], np.median(data_orig), np.median(data_mismatch), (np.median(data_mismatch) - np.median(data_orig)) / np.median(data_orig) * 100, p_value_mw))
+

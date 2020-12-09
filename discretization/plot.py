@@ -76,47 +76,132 @@ ax1 = fig.add_subplot(gs[0,0])
 ax2 = fig.add_subplot(gs[0,1])
 ax2.set_yscale("log")
 colors = ["C2","C3","C4","C5","C6"]
-ax1.set_xlabel("Precision")
 
 for idx,architecture in enumerate(architectures):
-    mean_acc = np.array([np.mean(data_full[architecture]["test_acc"]["full"]),np.mean(data_full[architecture]["test_acc"]["6"]),np.mean(data_full[architecture]["test_acc"]["5"]),
-                                        np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])])
+    # - Get data for accuracy and MSE for this architecture
+    data_acc = [
+        data_full[architecture]["test_acc"][bits]
+        for bits in ['full', '6', '5', '4', '3', '2']
+    ]
+    
+    data_mse = [
+        data_full[architecture]["final_out_mse"][bits]
+        for bits in ['full', '6', '5', '4', '3', '2']
+    ]
+    
+    
+    # - Get statistics for accuracy
+    mean_acc = np.array([
+      np.mean(x) for x in data_acc  
+    ])
+    
+    std_acc = np.array([
+      np.std(x) for x in data_acc  
+    ])
 
-    std_acc = np.array([np.std(data_full[architecture]["test_acc"]["full"]),np.std(data_full[architecture]["test_acc"]["6"]),np.std(data_full[architecture]["test_acc"]["5"]),
-                                        np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])])
+    iqr_low_acc = np.array([
+        np.percentile(x, 25) for x in data_acc
+    ])
+    
+    med_acc = np.array([
+        np.median(x) for x in data_acc
+    ])
+    
+    iqr_high_acc = np.array([
+        np.percentile(x, 75) for x in data_acc
+    ])
+    
 
-    mean_mse = np.array([np.mean(data_full[architecture]["final_out_mse"]["full"]),np.mean(data_full[architecture]["final_out_mse"]["6"]),np.mean(data_full[architecture]["final_out_mse"]["5"]),
-                                        np.mean(data_full[architecture]["final_out_mse"]["4"]),np.mean(data_full[architecture]["final_out_mse"]["3"]),np.mean(data_full[architecture]["final_out_mse"]["2"])])
+    # - Get statistics for MSE
+    mean_mse = np.array([
+      np.mean(x) for x in data_mse  
+    ])
+    
+    std_mse = np.array([
+      np.std(x) for x in data_mse  
+    ])
 
-    std_mse = np.array([np.std(data_full[architecture]["final_out_mse"]["full"]),np.std(data_full[architecture]["final_out_mse"]["6"]),np.std(data_full[architecture]["final_out_mse"]["5"]),
-                                        np.std(data_full[architecture]["final_out_mse"]["4"]),np.std(data_full[architecture]["final_out_mse"]["3"]),np.std(data_full[architecture]["final_out_mse"]["2"])])
+    iqr_low_mse = np.array([
+        np.percentile(x, 25) for x in data_mse
+    ])
+    
+    med_mse = np.array([
+        np.median(x) for x in data_mse
+    ])
+    
+    iqr_high_mse = np.array([
+        np.percentile(x, 75) for x in data_mse
+    ])
+    
+#     mean_acc = np.array([np.mean(data_full[architecture]["test_acc"]["full"]),np.mean(data_full[architecture]["test_acc"]["6"]),np.mean(data_full[architecture]["test_acc"]["5"]),
+#                                         np.mean(data_full[architecture]["test_acc"]["4"]),np.mean(data_full[architecture]["test_acc"]["3"]),np.mean(data_full[architecture]["test_acc"]["2"])])
+
+#     std_acc = np.array([np.std(data_full[architecture]["test_acc"]["full"]),np.std(data_full[architecture]["test_acc"]["6"]),np.std(data_full[architecture]["test_acc"]["5"]),
+#                                         np.std(data_full[architecture]["test_acc"]["4"]),np.std(data_full[architecture]["test_acc"]["3"]),np.std(data_full[architecture]["test_acc"]["2"])])
+    
+
+#     mean_mse = np.array([np.mean(data_full[architecture]["final_out_mse"]["full"]),np.mean(data_full[architecture]["final_out_mse"]["6"]),np.mean(data_full[architecture]["final_out_mse"]["5"]),
+#                                         np.mean(data_full[architecture]["final_out_mse"]["4"]),np.mean(data_full[architecture]["final_out_mse"]["3"]),np.mean(data_full[architecture]["final_out_mse"]["2"])])
+
+#     std_mse = np.array([np.std(data_full[architecture]["final_out_mse"]["full"]),np.std(data_full[architecture]["final_out_mse"]["6"]),np.std(data_full[architecture]["final_out_mse"]["5"]),
+#                                         np.std(data_full[architecture]["final_out_mse"]["4"]),np.std(data_full[architecture]["final_out_mse"]["3"]),np.std(data_full[architecture]["final_out_mse"]["2"])])
 
 
-    mean_vector_acc = smooth(mean_acc, sigma=1)
-    std_vector_acc = smooth(std_acc, sigma=20)
     if(architecture == "reservoir"):
         mean_vector_acc = smooth(mean_acc[1:], sigma=1)
         std_vector_acc = smooth(std_acc[1:], sigma=20)
-    
+        iqr_low_vector_acc = smooth(iqr_low_acc[1:], sigma=20)
+        iqr_high_vector_acc = smooth(iqr_high_acc[1:], sigma=20)
+        med_vector_acc = smooth(med_acc[1:], sigma=1)
+    else:
+        mean_vector_acc = smooth(mean_acc, sigma=1)
+        std_vector_acc = smooth(std_acc, sigma=20)
+        iqr_low_vector_acc = smooth(iqr_low_acc, sigma=20)
+        iqr_high_vector_acc = smooth(iqr_high_acc, sigma=20)
+        med_vector_acc = smooth(med_acc, sigma=1)
+
     mean_vector_mse = smooth(mean_mse, sigma=1)
     std_vector_mse = smooth(std_mse-mean_mse, sigma=20) + mean_vector_mse
+    
+    med_vector_mse = smooth(med_mse, sigma=1)
+    iqr_low_vector_mse = smooth(iqr_low_mse, sigma=20)
+    iqr_high_vector_mse = smooth(iqr_high_mse, sigma=20)
 
+    curve_middle_acc = med_vector_acc # mean_vector_acc #
+    curve_top_acc = iqr_high_vector_acc # mean_vector_acc+std_vector_acc #
+    curve_bottom_acc = iqr_low_vector_acc # mean_vector_acc-std_vector_acc #
+    
+    r_acc_mid = med_acc
+    r_acc_low = iqr_low_acc
+    r_acc_high = iqr_high_acc
+    
+    curve_middle_mse = med_vector_mse # mean_vector_mse
+    curve_top_mse = iqr_high_vector_mse # mean_vector_mse + std_vector_mse #
+    curve_bottom_mse = iqr_low_vector_mse # mean_vector_mse - std_vector_mse #
+    
+    r_mse_mid = med_mse
+    r_mse_low = iqr_low_mse
+    r_mse_high = iqr_high_mse
+    
+    
     x = levels
     if(architecture == "reservoir"):
-        x = np.linspace(1,5.0,len(std_vector_acc))
-        ax1.plot(x,mean_vector_acc, marker="o", markersize=5, markevery=[0,200,400,600,800], label=architecture_labels[idx], color=colors[idx])
-        ax1.fill_between(x,mean_vector_acc-std_vector_acc, mean_vector_acc+std_vector_acc, alpha=0.3, facecolor=colors[idx])
-        ax1.plot([0], mean_acc[0], marker="o", markersize=8, color=colors[idx])
-        ax1.fill_between([0],mean_acc[0]-std_acc[0], mean_acc[0]+std_acc[0], alpha=0.3, facecolor=colors[idx])
+        x = np.linspace(1, 5.0, len(std_vector_acc))
+        ax1.plot(x,curve_middle_acc, marker="o", markersize=5, markevery=[0,200,400,600,800], label=architecture_labels[idx], color=colors[idx])
+        ax1.fill_between(x, curve_bottom_acc, curve_top_acc, alpha=0.3, facecolor=colors[idx])
+        ax1.plot([0], r_acc_mid[0], marker="o", markersize=8, color=colors[idx])
+        ax1.fill_between([0], r_acc_low[0], r_acc_high[0], alpha=0.3, facecolor=colors[idx])
     else:
-        ax1.plot(x,mean_vector_acc, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
-        ax1.fill_between(x,mean_vector_acc-std_vector_acc, mean_vector_acc+std_vector_acc, alpha=0.3, facecolor=colors[idx])
+        ax1.plot(x, curve_middle_acc, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
+        ax1.fill_between(x, curve_bottom_acc, curve_top_acc, alpha=0.3, facecolor=colors[idx])
 
     if(architecture == "reservoir"):
+        ax2.plot([0], r_mse_mid[0], marker="o", markersize=5, color=colors[idx], label=architecture_labels[idx])
+        ax2.fill_between([0], r_mse_low[0], r_mse_high[0], alpha=0.3, facecolor=colors[idx])
         continue
 
-    ax2.plot(levels,mean_vector_mse, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
-    ax2.fill_between(levels,mean_vector_mse-std_vector_mse, mean_vector_mse+std_vector_mse, alpha=0.3, facecolor=colors[idx])
+    ax2.plot(levels, curve_middle_mse, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
+    ax2.fill_between(levels, curve_bottom_mse, curve_top_mse, alpha=0.3, facecolor=colors[idx])
 
 ax1.legend(frameon=False, loc=0, fontsize=5)
 ax1.set_xticklabels(precisions)
@@ -125,6 +210,8 @@ ax1.set_ylabel("Accuracy")
 ax1.set_yticks([0.5,0.8,1.0])
 ax1.spines["top"].set_visible(False)
 ax1.spines["right"].set_visible(False)
+ax1.text(x=-0.8, y=1.05, s="a", fontsize=16, fontweight="bold")
+ax1.set_xlabel("Precision")
 
 ax2.legend(frameon=False, loc=0, fontsize=5)
 ax2.set_xticks([0,1,2,3,4,5])
@@ -132,6 +219,8 @@ ax2.set_xticklabels(precisions)
 ax2.set_ylabel("MSE")
 ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
+ax2.text(x=-1, y=1.2, s="b", fontsize=16, fontweight="bold")
+ax2.set_xlabel("Precision")
 
 plt.plot()
 plt.savefig("../Figures/quantisation.pdf", dpi=1200)

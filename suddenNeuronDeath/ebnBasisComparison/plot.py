@@ -4,10 +4,10 @@ import os
 import seaborn as sns
 import matplotlib
 matplotlib.rc('font', family='Sans-Serif')
-matplotlib.rc('text', usetex=True)
+matplotlib.rc('text', usetex=False)
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
-matplotlib.rcParams['axes.xmargin'] = 0
+matplotlib.rcParams['axes.xmargin'] = 0.1
 import matplotlib.pyplot as plt
 import matplotlib.collections as clt
 from matplotlib.cbook import boxplot_stats
@@ -17,6 +17,8 @@ import matplotlib.cm as cm
 from matplotlib.lines import Line2D
 from matplotlib import ticker as mticker
 from copy import copy
+
+import pathlib as pl
 
 def remove_outliers(x):
     outliers = [y for stat in boxplot_stats(x) for y in stat['fliers']]
@@ -34,10 +36,14 @@ for key in keys:
     for subkey in subkeys:
         full_dict[key][subkey] = []
 
-base_path = "/home/julian/Documents/RobustClassificationWithEBNs/suddenNeuronDeath"
+absolute_path = os.path.abspath(__file__)
+directory_name = os.path.dirname(absolute_path)
+os.chdir(directory_name)
+
+base_path = pl.Path("../Resources")
 
 for i in range(networks):
-    fn = os.path.join(base_path, f"Resources/{i}ads_jax_neuron_failure_out.json")
+    fn = base_path / f"{i}ads_jax_neuron_failure_out.json"
     with open(fn, "rb") as f:
         load_dict = json.load(f)
     for subkey in subkeys:
@@ -45,7 +51,7 @@ for i in range(networks):
             full_dict[key][subkey].append(load_dict[subkey][i])
 
 fig = plt.figure(figsize=(7.14,2.91))
-outer = gridspec.GridSpec(1, 4, figure=fig, wspace=0.6)
+outer = gridspec.GridSpec(1, 5, figure=fig, wspace=0.)
 
 c_orig = (1.0, 1.0, 1.0, 1.0)
 c_perturbed = (0, 0, 0, 1.0)
@@ -57,10 +63,10 @@ inner_2 = gridspec.GridSpecFromSubplotSpec(1, 1,
             subplot_spec=outer[1], wspace=0.0)
 
 inner_3 = gridspec.GridSpecFromSubplotSpec(1, 1,
-                subplot_spec=outer[2], wspace=0.0)
+                subplot_spec=outer[3], wspace=0.0)
 
 inner_4 = gridspec.GridSpecFromSubplotSpec(1, 1,
-            subplot_spec=outer[3], wspace=0.0)
+            subplot_spec=outer[4], wspace=0.0)
 
 ax_1 = plt.Subplot(fig, inner_1[0])
 ax_2 = plt.Subplot(fig, inner_2[0])
@@ -112,8 +118,19 @@ ax_1.set_xticks([])
 ax_2.set_xticks([])
 ax_2.set_yticks([])
 
-ax_1.set_title("With EBN")
-ax_2.set_title("Without EBN")
+ax_1.text(x = ax_1.get_xlim()[0]-.4, y = ax_1.get_ylim()[1]+.03,
+          s = 'a', fontweight='bold',
+          fontsize = 16,
+         )
+
+ax_3.text(x = ax_3.get_xlim()[0]-1, y = ax_3.get_ylim()[0]-.003,
+          s = 'b', fontweight='bold',
+          fontsize = 16,
+         )
+
+
+ax_1.set_title("$\Omega^{f}$ = EBN")
+ax_2.set_title("$\Omega^{f} = 0$")
 
 for key in ax_2.spines.keys():
     ax_2.spines[key].set_visible(False)
@@ -152,26 +169,28 @@ for l1,l2 in zip(ax_3.lines[3:],ax_4.lines[3:]):
             l2.set_color('white')
 
 
-ylim = [0.0,0.05]
-plt.ylim(ylim)
-ax_3.set_ylim(ylim)
-ax_4.set_ylim(ylim)
 ax_3.get_legend().remove()
 ax_4.get_legend().remove()
 plt.xlabel('')
 plt.ylabel('')
 plt.axis("off")
 
-ax_3.set_ylim(ax_3.get_ylim()[::-1])
-ax_4.set_ylim(ax_4.get_ylim()[::-1])
+# ax_3.set_ylim(ax_3.get_ylim()[::-1])
+# ax_4.set_ylim(ax_4.get_ylim()[::-1])
 
 ax_3.set_yticks([0.01,0.025,0.04])
 ax_3.set_xticks([])
 ax_4.set_xticks([])
 ax_4.set_yticks([])
 
-ax_3.set_title("With EBN")
-ax_4.set_title("Without EBN")
+ylim = [0.05, 0.0]
+plt.ylim(ylim)
+ax_3.set_ylim(ylim)
+ax_4.set_ylim(ylim)
+
+
+ax_3.set_title("$\Omega^{f}$ = EBN")
+ax_4.set_title("$\Omega^{f} = 0$")
 
 for key in ax_4.spines.keys():
     ax_4.spines[key].set_visible(False)
@@ -185,5 +204,5 @@ fig.add_subplot(ax_1)
 fig.add_subplot(ax_2)
 fig.add_subplot(ax_3)
 fig.add_subplot(ax_4)
-plt.savefig(f"/home/julian/Documents/RobustClassificationWithEBNs/Figures/figure_ebn_comparison.png", dpi=1200)
+plt.savefig(f"../../Figures/figure_ebn_comparison.pdf", dpi=1200)
 plt.show(block=True)

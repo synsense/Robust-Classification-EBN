@@ -3,7 +3,7 @@ import numpy as np
 import os
 import matplotlib
 matplotlib.rc('font', family='Sans-Serif')
-matplotlib.rc('text', usetex=True)
+matplotlib.rc('text', usetex=False)
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
@@ -162,7 +162,7 @@ for idx,architecture in enumerate(architectures[:4]):
     ax2.plot(levels, mse_middle_curve, marker="o", markevery=[0,333,666,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
     ax2.fill_between(levels, mse_bottom_curve, mse_top_curve, alpha=0.3, facecolor=colors[idx])
 
-ax1.legend(frameon=False, loc=0, fontsize=5)
+ax1.legend(frameon=False, loc=0, fontsize=7)
 ax1.set_xticklabels(noise_levels)
 ax1.set_xticks([0,1,2,3])
 ax1.set_ylabel("Accuracy")
@@ -170,12 +170,16 @@ ax1.set_yticks([0.5,0.8,1.0])
 ax1.spines["top"].set_visible(False)
 ax1.spines["right"].set_visible(False)
 
-ax2.legend(frameon=False, loc=0, fontsize=5)
+ax2.legend(frameon=False, loc=0, fontsize=7)
 ax2.set_xticks([0,1,2,3])
 ax2.set_xticklabels(noise_levels)
 ax2.set_ylabel("MSE")
 ax2.spines["top"].set_visible(False)
 ax2.spines["right"].set_visible(False)
+
+
+ax1.text(x=-.46, y=1.04, s="a", fontsize=16, fontweight="bold")
+ax2.text(x=-.6, y=1.0, s="b", fontsize=16, fontweight="bold")
 
 
 plt.plot()

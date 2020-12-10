@@ -1,7 +1,7 @@
 import numpy as np 
 import matplotlib
 matplotlib.rc('font', family='Sans-Serif')
-matplotlib.rc('text', usetex=True)
+matplotlib.rc('text', usetex=False)
 matplotlib.rcParams['lines.markersize'] = 1.0
 matplotlib.rcParams['scatter.marker'] = '.'
 matplotlib.rcParams['axes.xmargin'] = 0

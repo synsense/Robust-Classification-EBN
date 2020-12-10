@@ -3,7 +3,7 @@ import numpy as np
 import os
 import matplotlib
 matplotlib.rc('font', family='Sans-Serif')
-matplotlib.rc('text', usetex=True)
+matplotlib.rc('text', usetex=False)
 matplotlib.rcParams['lines.linewidth'] = 0.5
 matplotlib.rcParams['lines.markersize'] = 0.5
 matplotlib.rcParams['axes.xmargin'] = 0
@@ -203,7 +203,7 @@ for idx,architecture in enumerate(architectures):
     ax2.plot(levels, curve_middle_mse, marker="o", markersize=5, markevery=[0,200,400,600,800,1000], label=architecture_labels[idx], color=colors[idx])
     ax2.fill_between(levels, curve_bottom_mse, curve_top_mse, alpha=0.3, facecolor=colors[idx])
 
-ax1.legend(frameon=False, loc=0, fontsize=5)
+ax1.legend(frameon=False, loc=0, fontsize=6)
 ax1.set_xticklabels(precisions)
 ax1.set_xticks([0,1,2,3,4,5])
 ax1.set_ylabel("Accuracy")
@@ -213,7 +213,7 @@ ax1.spines["right"].set_visible(False)
 ax1.text(x=-0.8, y=1.05, s="a", fontsize=16, fontweight="bold")
 ax1.set_xlabel("Precision")
 
-ax2.legend(frameon=False, loc=0, fontsize=5)
+ax2.legend(frameon=False, loc=0, fontsize=6)
 ax2.set_xticks([0,1,2,3,4,5])
 ax2.set_xticklabels(precisions)
 ax2.set_ylabel("MSE")
@@ -229,7 +229,7 @@ plt.show()
 
 # - Statistical tests
 crossed = np.zeros((len(architectures),len(architectures)))
-print("A1/A2 \t\t Median Acc A1 \t Median Acc A2 \t P-Value (Mann-Whitney-U) \t Precision ")
+print("A1/A2 \t\t\t Median Acc A1 \t Median Acc A2 \t P-Value (Mann-Whitney-U) \t Precision ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
         if(i == j): continue
@@ -237,12 +237,12 @@ for i,architecture in enumerate(architectures):
         for idx,precision in enumerate(dkeys):
             prec = label_precision[idx]
             p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["test_acc"][precision],data_full[architectures[j]]["test_acc"][precision])[1]
-            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["test_acc"][precision]),np.median(data_full[architectures[j]]["test_acc"][precision]),p_value_mw,prec))
+            print("%12s/%12s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["test_acc"][precision]),np.median(data_full[architectures[j]]["test_acc"][precision]),p_value_mw,prec))
         crossed[i,j] = 1; crossed[j,i] = 1
         print()
 
 crossed = np.zeros((len(architectures),len(architectures)))
-print("A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) \t Precision ")
+print("A1/A2 \t\t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) \t Precision ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
         if(i == j): continue
@@ -250,6 +250,6 @@ for i,architecture in enumerate(architectures):
         for idx,precision in enumerate(dkeys):
             prec = label_precision[idx]
             p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["final_out_mse"][precision],data_full[architectures[j]]["final_out_mse"][precision])[1]
-            print("%s/%s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["final_out_mse"][precision]),np.median(data_full[architectures[j]]["final_out_mse"][precision]),p_value_mw,prec))
+            print("%12s/%12s \t\t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["final_out_mse"][precision]),np.median(data_full[architectures[j]]["final_out_mse"][precision]),p_value_mw,prec))
         crossed[i,j] = 1; crossed[j,i] = 1
         print()

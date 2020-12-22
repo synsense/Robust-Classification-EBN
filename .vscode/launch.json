@@ -9,7 +9,7 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
-            "args": ["--verbose=0", "--network-idx=8", "--use-ebn", "--num-trials=1"],
+            "args": ["--verbose=0", "--network-idx=0", "--use-ebn", "--num-trials=1"],
             "console": "integratedTerminal"
         },{
             "name": "XOR",

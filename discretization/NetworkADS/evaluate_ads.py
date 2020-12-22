@@ -303,6 +303,13 @@ class HeySnipsNetworkADS(BaseModel):
         final_out_mse_5bit = []
         final_out_mse_6bit = []
 
+        final_out_mse_tgt = []
+        final_out_mse_tgt_2bit = []
+        final_out_mse_tgt_3bit = []
+        final_out_mse_tgt_4bit = []
+        final_out_mse_tgt_5bit = []
+        final_out_mse_tgt_6bit = []
+
         # - Store mean firing rates (tricky for BPTT because of surrogate spikes. Need to use spiking layer as a replacement.)
         mfr = []
         mfr_2bit = []
@@ -388,6 +395,13 @@ class HeySnipsNetworkADS(BaseModel):
                 final_out_mse_4bit.append( np.mean( (final_out_4bit-batched_rate_output[idx])**2 ) )
                 final_out_mse_5bit.append( np.mean( (final_out_5bit-batched_rate_output[idx])**2 ) )
                 final_out_mse_6bit.append( np.mean( (final_out_6bit-batched_rate_output[idx])**2 ) )
+
+                final_out_mse_tgt.append( np.mean( (final_out-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_2bit.append( np.mean( (final_out_2bit-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_3bit.append( np.mean( (final_out_3bit-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_4bit.append( np.mean( (final_out_4bit-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_5bit.append( np.mean( (final_out_5bit-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_6bit.append( np.mean( (final_out_6bit-tgt_signals[idx])**2 ) )
 
                 # - Store mean firing rates (tricky for BPTT because of surrogate spikes. Need to use spiking layer as a replacement.)
                 mfr.append(self.get_mfr(np.array(spikes_ts[idx])))
@@ -484,6 +498,7 @@ class HeySnipsNetworkADS(BaseModel):
         out_dict["test_acc"] = [test_acc,test_acc_2bit,test_acc_3bit,test_acc_4bit,test_acc_5bit,test_acc_6bit,test_acc_rate]
         out_dict["final_out_power"] = [np.mean(final_out_power),np.mean(final_out_power_2bit),np.mean(final_out_power_3bit),np.mean(final_out_power_4bit),np.mean(final_out_power_5bit),np.mean(final_out_power_6bit)]
         out_dict["final_out_mse"] = [np.mean(final_out_mse),np.mean(final_out_mse_2bit),np.mean(final_out_mse_3bit),np.mean(final_out_mse_4bit),np.mean(final_out_mse_5bit),np.mean(final_out_mse_6bit)]
+        out_dict["final_out_mse_tgt"] = [np.mean(final_out_mse_tgt).item(),np.mean(final_out_mse_tgt_2bit).item(),np.mean(final_out_mse_tgt_3bit).item(),np.mean(final_out_mse_tgt_4bit).item(),np.mean(final_out_mse_tgt_5bit).item(),np.mean(final_out_mse_tgt_6bit).item()]
         out_dict["mfr"] = [np.mean(mfr),np.mean(mfr_2bit),np.mean(mfr_3bit),np.mean(mfr_4bit),np.mean(mfr_5bit),np.mean(mfr_6bit)]
         out_dict["dynamics_power"] = [np.mean(dynamics_power),np.mean(dynamics_power_2bit),np.mean(dynamics_power_3bit),np.mean(dynamics_power_4bit),np.mean(dynamics_power_5bit),np.mean(dynamics_power_6bit)]
         out_dict["dynamics_mse"] = [np.mean(dynamics_mse),np.mean(dynamics_mse_2bit),np.mean(dynamics_mse_3bit),np.mean(dynamics_mse_4bit),np.mean(dynamics_mse_5bit),np.mean(dynamics_mse_6bit)]

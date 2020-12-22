@@ -224,6 +224,9 @@ class HeySnipsNetworkFORCE(BaseModel):
         final_out_mse_original = []
         final_out_mse_mismatch = []
 
+        final_out_mse_tgt_original = []
+        final_out_mse_tgt_mismatch = []
+
         mfr_original = []
         mfr_mismatch = []
 
@@ -240,6 +243,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         
             filtered = np.stack([s[0][1] for s in batch])
             target_labels = [s[1] for s in batch]
+            tgt_signals = np.stack([s[2] for s in batch])
             batched_res_inputs, batched_rate_net_dynamics, batched_rate_output = self.get_data(filtered_batch=filtered)
 
             spikes_ts_original, _, states_original = vmap(self.force_layer_original._evolve_functional, in_axes=(None, None, 0))(self.force_layer_original._pack(), False, batched_res_inputs)
@@ -263,6 +267,9 @@ class HeySnipsNetworkFORCE(BaseModel):
 
                 final_out_mse_original.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
                 final_out_mse_mismatch.append( np.mean( (final_out_mismatch-batched_rate_output[idx])**2 ) )
+
+                final_out_mse_tgt_original.append( np.mean( (final_out-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_mismatch.append( np.mean( (final_out_mismatch-tgt_signals[idx])**2 ) )
 
                 mfr_original.append(self.get_mfr(np.array(spikes_ts_original[idx])))
                 mfr_mismatch.append(self.get_mfr(np.array(spikes_ts_mismatch[idx])))
@@ -309,6 +316,7 @@ class HeySnipsNetworkFORCE(BaseModel):
         out_dict["test_acc"] = [test_acc,test_acc_mismatch,test_acc_rate]
         out_dict["final_out_power"] = [np.mean(final_out_power_original).item(),np.mean(final_out_power_mismatch).item()]
         out_dict["final_out_mse"] = [np.mean(final_out_mse_original).item(),np.mean(final_out_mse_mismatch).item()]
+        out_dict["final_out_mse_tgt"] = [np.mean(final_out_mse_tgt_original),np.mean(final_out_mse_tgt_mismatch)]
         out_dict["mfr"] = [np.mean(mfr_original).item(),np.mean(mfr_mismatch).item()]
         out_dict["dynamics_power"] = [np.mean(dynamics_power_original).item(),np.mean(dynamics_power_mismatch).item()]
         out_dict["dynamics_mse"] = [np.mean(dynamics_mse_original).item(),np.mean(dynamics_mse_mismatch).item()]

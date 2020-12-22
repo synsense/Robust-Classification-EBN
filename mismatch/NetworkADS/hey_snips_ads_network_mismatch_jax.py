@@ -313,6 +313,9 @@ class HeySnipsNetworkADS(BaseModel):
         final_out_mse_original = []
         final_out_mse_mismatch = []
 
+        final_out_mse_tgt_original = []
+        final_out_mse_tgt_mismatch = []
+
         mfr_original = []
         mfr_mismatch = []
 
@@ -350,6 +353,9 @@ class HeySnipsNetworkADS(BaseModel):
 
                 final_out_mse_original.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
                 final_out_mse_mismatch.append( np.mean( (final_out_mismatch-batched_rate_output[idx])**2 ) )
+
+                final_out_mse_tgt_original.append( np.mean( (final_out-tgt_signals[idx])**2 ) )
+                final_out_mse_tgt_mismatch.append( np.mean( (final_out_mismatch-tgt_signals[idx])**2 ) )
 
                 mfr_original.append(self.get_mfr(np.array(spikes_ts[idx])))
                 mfr_mismatch.append(self.get_mfr(np.array(spikes_ts_mismatch[idx])))
@@ -419,6 +425,7 @@ class HeySnipsNetworkADS(BaseModel):
         out_dict["test_acc"] = [test_acc,test_acc_mismatch,test_acc_rate]
         out_dict["final_out_power"] = [np.mean(final_out_power_original),np.mean(final_out_power_mismatch)]
         out_dict["final_out_mse"] = [np.mean(final_out_mse_original),np.mean(final_out_mse_mismatch)]
+        out_dict["final_out_mse_tgt"] = [np.mean(final_out_mse_tgt_original),np.mean(final_out_mse_tgt_mismatch)]
         out_dict["mfr"] = [np.mean(mfr_original),np.mean(mfr_mismatch)]
         out_dict["dynamics_power"] = [np.mean(dynamics_power_original),np.mean(dynamics_power_mismatch)]
         out_dict["dynamics_mse"] = [np.mean(dynamics_mse_original),np.mean(dynamics_mse_mismatch)]

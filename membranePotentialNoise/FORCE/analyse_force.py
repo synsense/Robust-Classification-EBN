@@ -173,6 +173,7 @@ class HeySnipsFORCE(BaseModel):
 
         final_out_power = []
         final_out_mse = []
+        final_out_mse_tgt = []
         mfr = []
         dynamics_power = []
         dynamics_mse = []
@@ -197,6 +198,7 @@ class HeySnipsFORCE(BaseModel):
  
                 final_out_power.append( np.var(final_out-batched_rate_output[idx]) / np.var(batched_rate_output[idx]) )
                 final_out_mse.append( np.mean( (final_out-batched_rate_output[idx])**2 ) )
+                final_out_mse_tgt.append( np.mean( (final_out-tgt_signals[idx])**2 ) )
                 mfr.append(self.get_mfr(np.array(spikes_ts[idx])))
                 dynamics_power.append( np.mean(np.var(batched_output[idx]-batched_rate_net_dynamics[idx], axis=0)) / (np.sum(np.var(batched_rate_net_dynamics[idx], axis=0))) )
                 dynamics_mse.append( np.mean(np.mean((batched_output[idx]-batched_rate_net_dynamics[idx])**2, axis=0)) )
@@ -245,6 +247,7 @@ class HeySnipsFORCE(BaseModel):
         out_dict["test_acc"] = [test_acc,test_acc_rate]
         out_dict["final_out_power"] = [np.mean(final_out_power).item()]
         out_dict["final_out_mse"] = [np.mean(final_out_mse).item()]
+        out_dict["final_out_mse_tgt"] = [np.mean(final_out_mse_tgt).item()]
         out_dict["mfr"] = [np.mean(mfr).item()]
         out_dict["dynamics_power"] = [np.mean(dynamics_power).item()]
         out_dict["dynamics_mse"] = [np.mean(dynamics_mse).item()]

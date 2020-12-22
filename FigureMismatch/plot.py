@@ -63,7 +63,7 @@ def plot_dist(ax, tcs, x_label, title, bins=None):
         ax.spines['left'].set_visible(False)
         ax.spines['right'].set_visible(False)
         ax.set_yticks([])
-    ax.text(x = 0, y = max(ax.get_ylim()), s=title)
+    ax.text(x = 0, y = max(ax.get_ylim()), s=title, fontsize=16)
     ax.set_xticks(means)
     ax.set_xticklabels(["%d" % (1000*mu) for mu in means])
     if(not x_label is None):
@@ -100,7 +100,7 @@ scatter_mm(ax22, tau_mems, color="#3262db", label=r"$\tau_\textnormal{mem}$")
 scatter_mm(ax22, weights_slow, color="#db3262", label=r"$W_\textnormal{AMPA}$")
 scatter_mm(ax22, weights_fast, color="#29a624", label=r"$W_\textnormal{NMDA}$")
 ax22.legend(frameon=False, loc=0, fontsize=7)
-ax22.text(x = 5, y = max(ax22.get_ylim()), s=r"$\textbf{d}$")
+ax22.text(x = 5, y = max(ax22.get_ylim()), s=r"$\textbf{d}$", fontsize=16)
 
 plt.savefig(os.path.join(bp,"../Figures/mismatch_distribution.pdf"))
 plt.show()

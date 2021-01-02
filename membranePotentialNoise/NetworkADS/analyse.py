@@ -55,7 +55,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.num_rate_neurons = 128 
         self.num_targets = len(labels)
         self.time_base = np.arange(0.0,5.0,self.dt)
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -86,7 +87,8 @@ class HeySnipsNetworkADS(BaseModel):
         if(use_ebn):
             postfix += "_ebn"
         network_name = f"Resources/jax_ads{network_idx}{postfix}.json"
-        self.model_path_ads_net = f"/home/julian/Documents/RobustClassificationWithEBNs/mismatch/{network_name}"
+        home = os.path.expanduser('~')
+        self.model_path_ads_net = f"{home}/Documents/RobustClassificationWithEBNs/mismatch/{network_name}"
 
         if(os.path.exists(self.model_path_ads_net)):
             print("Loading networks...")

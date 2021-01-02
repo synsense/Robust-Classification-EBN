@@ -62,7 +62,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.gain_6bit = 1.0
 
         # - This repository contains the trained models in ../mismatch/Resources
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
 
         # - Load the rate network
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
@@ -542,9 +543,8 @@ if __name__ == "__main__":
     # - For each level of discretization, we store one dictionary containing all the information from above in files with the following path and name
     # - NOTE: The postfix is not required for FORCE, Reservoir and BPTT, since only one version of them exists
 
-    machine_specific_path = '/home/theiera' if os.uname().nodename=='iatturina' else '/home/julian'
-    
-    output_final_path = f'{machine_specific_path}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/ads_jax{postfix}{network_idx}_discretization_out.json'
+    home = os.path.expanduser('~')    
+    output_final_path = f'{home}/Documents/RobustClassificationWithEBNs/discretization/Resources/Plotting/ads_jax{postfix}{network_idx}_discretization_out.json'
     
     # - Avoid re-running for some network-idx
     if(os.path.exists(output_final_path)):

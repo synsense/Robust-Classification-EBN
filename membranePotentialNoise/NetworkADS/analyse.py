@@ -312,7 +312,8 @@ if __name__ == "__main__":
     if(use_ebn):
         postfix += "_ebn"
 
-    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/ads_jax{postfix}{network_idx}_noise_analysis_output.json'
+    home = os.path.expanduser('~')
+    ads_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/membranePotentialNoise/Resources/Plotting/ads_jax{postfix}{network_idx}_noise_analysis_output.json'
 
     if(os.path.exists(ads_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

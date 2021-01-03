@@ -81,8 +81,8 @@ class HeySnipsNetworkADS(BaseModel):
         self.num_targets = len(labels)
         self.use_batching = use_batching
         self.use_ebn = use_ebn
-
-        self.base_path = "/home/julian/Documents/RobustClassificationWithEBNs/mismatch"
+        home = os.path.expanduser('~')
+        self.base_path = f"{home}/Documents/RobustClassificationWithEBNs/mismatch"
 
         rate_net_path = os.path.join(self.base_path, "Resources/rate_heysnips_tanh_0_16.model")
         with open(rate_net_path, "r") as f:
@@ -459,7 +459,8 @@ if __name__ == "__main__":
     if(use_ebn):
         postfix += "_ebn"
 
-    ads_orig_final_path = f'/home/julian/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{network_idx}_jax{postfix}_mismatch_analysis_output.json'
+    home = os.path.expanduser('~')
+    ads_orig_final_path = f'{home}/Documents/RobustClassificationWithEBNs/mismatch/Resources/Plotting/ads{network_idx}_jax{postfix}_mismatch_analysis_output.json'
 
     if(os.path.exists(ads_orig_final_path)):
         print("Exiting because data was already generated. Uncomment this line to reproduce the results.")

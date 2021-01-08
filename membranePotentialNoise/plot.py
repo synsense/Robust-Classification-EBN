@@ -16,9 +16,11 @@ from scipy import stats
 
 import pathlib as pl
 
+USE_TGT = True
+
 architectures = ["force", "reservoir", "bptt", "ads_jax_ebn", "ads_jax"]
 architecture_labels = ["FORCE", "Reservoir", "BPTT", "Network ADS", "Network ADS No EBN"]
-keys = ["test_acc", "final_out_mse"]
+keys = ["test_acc", "final_out_mse", "final_out_mse_tgt"]
 dkeys = ["0.0", "0.01", "0.05", "0.1"]
 
 networks = 10
@@ -39,7 +41,7 @@ def remove_outliers(x):
 # - Initialize data structure
 data_full = {}
 for architecture in architectures:
-    data_full[architecture] = {"test_acc": {"0.0":[], "0.01":[], "0.05":[], "0.1":[]}, "final_out_mse": {"0.0":[], "0.01":[], "0.05":[], "0.1":[]}}
+    data_full[architecture] = {"test_acc": {"0.0":[], "0.01":[], "0.05":[], "0.1":[]}, "final_out_mse": {"0.0":[], "0.01":[], "0.05":[], "0.1":[]}, "final_out_mse_tgt": {"0.0":[], "0.01":[], "0.05":[], "0.1":[]}}
 
 for architecture in architectures:
     for i in range(networks):
@@ -49,12 +51,19 @@ for architecture in architectures:
                 data = json.load(f)
                 for key in keys:
                     for idx,dkey in enumerate(dkeys):
-                        data_full[architecture][key][dkey].append(data[dkey][key][0])
+                        try:
+                            tmp = data[dkey][key][0]
+                        except:
+                            pass
+                        else:
+                            data_full[architecture][key][dkey].append(tmp)
         else:
             print(f"ERROR: data file not found: {fn}")
             
     for dkey in dkeys:
         data_full[architecture]["final_out_mse"][dkey] = remove_outliers(data_full[architecture]["final_out_mse"][dkey])
+        if(architecture in ["force","ads_jax_ebn"]):
+            data_full[architecture]["final_out_mse_tgt"][dkey] = remove_outliers(data_full[architecture]["final_out_mse_tgt"][dkey])
     
 
 levels = np.linspace(0,3,1001)
@@ -89,6 +98,43 @@ for idx,architecture in enumerate(architectures[:4]):
         for noise_level in dkeys
     ]
     
+    if(architecture in ["force","ads_jax_ebn"]):
+        data_mse_tgt = [
+            data_full[architecture]["final_out_mse_tgt"][noise_level]
+            for noise_level in dkeys
+        ]
+
+        mean_mse_tgt = np.array([
+        np.mean(x) for x in data_mse_tgt  
+        ])
+        
+        std_mse_tgt = np.array([
+        np.std(x) for x in data_mse_tgt  
+        ])
+
+        iqr_low_mse_tgt = np.array([
+            np.percentile(x, 25) for x in data_mse_tgt
+        ])
+        
+        med_mse_tgt = np.array([
+            np.median(x) for x in data_mse_tgt
+        ])
+        
+        iqr_high_mse_tgt = np.array([
+            np.percentile(x, 75) for x in data_mse_tgt
+        ])
+
+        mean_vector_mse_tgt = smooth(mean_mse_tgt, sigma=1)
+        std_vector_mse_tgt = smooth(std_mse_tgt-mean_mse_tgt, sigma=20) + mean_vector_mse_tgt
+
+        mse_middle_curve_tgt = smooth(med_mse_tgt, sigma = 1)
+        mse_top_curve_tgt = smooth(iqr_high_mse_tgt, sigma = 20)
+        mse_bottom_curve_tgt = smooth(iqr_low_mse_tgt, sigma = 20)
+        
+        r_mse_mid_tgt = med_mse_tgt
+        r_mse_low_tgt = iqr_low_mse_tgt
+        r_mse_high_tgt = iqr_high_mse_tgt
+
     
     # - Get statistics for accuracy
     mean_acc = np.array([
@@ -140,27 +186,16 @@ for idx,architecture in enumerate(architectures[:4]):
     mse_middle_curve = smooth(med_mse, sigma = 1)
     mse_top_curve = smooth(iqr_high_mse, sigma = 20)
     mse_bottom_curve = smooth(iqr_low_mse, sigma = 20)
-    
-#     mean_vector = smooth(np.array([np.mean(data_full[architecture]["test_acc"]["0.0"]),np.mean(data_full[architecture]["test_acc"]["0.01"]),np.mean(data_full[architecture]["test_acc"]["0.05"]),
-#                                         np.mean(data_full[architecture]["test_acc"]["0.1"])]), sigma=1)
-
-#     std_vector = smooth(np.array([np.std(data_full[architecture]["test_acc"]["0.0"]),np.std(data_full[architecture]["test_acc"]["0.01"]),np.std(data_full[architecture]["test_acc"]["0.05"]),
-#                                         np.std(data_full[architecture]["test_acc"]["0.1"])]), sigma=20)
-
-#     mean_mse = np.array([np.mean(data_full[architecture]["final_out_mse"]["0.0"]),np.mean(data_full[architecture]["final_out_mse"]["0.01"]),np.mean(data_full[architecture]["final_out_mse"]["0.05"]),
-#                                         np.mean(data_full[architecture]["final_out_mse"]["0.1"])])
-
-#     std_mse = np.array([np.std(data_full[architecture]["final_out_mse"]["0.0"]),np.std(data_full[architecture]["final_out_mse"]["0.01"]),np.std(data_full[architecture]["final_out_mse"]["0.05"]),
-#                                         np.std(data_full[architecture]["final_out_mse"]["0.1"])])
-
-#     mean_vector_mse = smooth(mean_mse, sigma=1)
-#     std_vector_mse = smooth(std_mse, sigma=20)
 
     ax1.plot(levels, acc_middle_curve, marker="o", markevery=[0,333,666,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
     ax1.fill_between(levels, acc_bottom_curve, acc_top_curve, alpha=0.3, facecolor=colors[idx])
 
-    ax2.plot(levels, mse_middle_curve, marker="o", markevery=[0,333,666,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
-    ax2.fill_between(levels, mse_bottom_curve, mse_top_curve, alpha=0.3, facecolor=colors[idx])
+    if(USE_TGT and architecture in ["force","ads_jax_ebn"]):
+        ax2.plot(levels, mse_middle_curve_tgt, marker="o", markevery=[0,333,666,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
+        ax2.fill_between(levels, mse_bottom_curve_tgt, mse_top_curve_tgt, alpha=0.3, facecolor=colors[idx])
+    else:   
+        ax2.plot(levels, mse_middle_curve, marker="o", markevery=[0,333,666,999], markersize=5, label=architecture_labels[idx], color=colors[idx])
+        ax2.fill_between(levels, mse_bottom_curve, mse_top_curve, alpha=0.3, facecolor=colors[idx])
 
 ax1.legend(frameon=False, loc=0, fontsize=7)
 ax1.set_xticklabels(noise_levels)
@@ -183,7 +218,11 @@ ax2.text(x=-.6, y=1.0, s="b", fontsize=16, fontweight="bold")
 
 
 plt.plot()
-plt.savefig("../Figures/membranePotentialNoise.pdf", dpi=1200)
+if(USE_TGT):
+    fname =  "../Figures/membranePotentialNoise_mse_vs_target.pdf"
+else:
+    fname = "../Figures/membranePotentialNoise.pdf"
+plt.savefig(fname, dpi=1200)
 plt.show()
 
 # - Statistical tests
@@ -205,10 +244,12 @@ crossed = np.zeros((len(architectures),len(architectures)))
 print("    Architecture 1/ Architecture 2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (U) \t Noise $\\sigma$ ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
+        ind_i = "final_out_mse_tgt" if(USE_TGT and architectures[i] in ["force","ads_jax_ebn"]) else "final_out_mse"
+        ind_j = "final_out_mse_tgt" if(USE_TGT and architectures[j] in ["force","ads_jax_ebn"]) else "final_out_mse"
         if(i == j): continue
         if(crossed[i,j] == 1): continue
         for idx,std in enumerate(dkeys):
-            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]]["final_out_mse"][std],data_full[architectures[j]]["final_out_mse"][std])[1]
-            print("%19s/%19s \t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]]["final_out_mse"][std]),np.median(data_full[architectures[j]]["final_out_mse"][std]),p_value_mw,std))
+            p_value_mw = stats.mannwhitneyu(data_full[architectures[i]][ind_i][std],data_full[architectures[j]][ind_j][std])[1]
+            print("%19s/%19s \t %.4f \t %.4f \t %.3E \t %s" % (architecture_labels[i],architecture_labels[j],np.median(data_full[architectures[i]][ind_i][std]),np.median(data_full[architectures[j]][ind_j][std]),p_value_mw,std))
         crossed[i,j] = 1; crossed[j,i] = 1
         print()

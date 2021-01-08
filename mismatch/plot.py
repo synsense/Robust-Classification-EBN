@@ -22,9 +22,7 @@ from scipy import stats
 import pathlib as pl
 
 USE_VIOLIN = True
-
-def generate_random_data():
-    return 0.1*np.random.randn(3, 50)+np.random.uniform()
+USE_TGT = False
 
 # - Change current directory to directory where this file is located
 absolute_path = os.path.abspath(__file__)
@@ -37,14 +35,14 @@ print(f"Base path: {bp}")
 mismatch_stds = [0.05, 0.1, 0.2]
 architectures = ["reservoir","force", "bptt", "ads_jax_ebn"]
 label_architectures = ["Reservoir", "FORCE", "BPTT", "Network ADS"]
-keys = ["final_out_power","final_out_mse","mfr","dynamics_power","dynamics_mse"]
+keys = ["final_out_power","final_out_mse","final_out_mse_tgt","mfr","dynamics_power","dynamics_mse"]
 keys_bptt = ["final_out_mse"]
 keys_reservoir = ["final_out_mse","mfr"]
 num_trials = 10
 networks = 10
 
 # - Structure: {"0.05": [dict1,dict2,...,dict50], "0.2":[], "0.3":[]}
-def initialize_dict(architecture, use_fake):
+def initialize_dict(architecture):
     if(architecture == "bptt"):
         local_keys = keys_bptt
     elif(architecture == "reservoir"):
@@ -58,14 +56,11 @@ def initialize_dict(architecture, use_fake):
         for key in local_keys:
            d[str(mismatch_std)][key] = []
            d['orig'][key] = []
-           if(use_fake):
-               d[str(mismatch_std)][key] = np.random.uniform(low=0.6,high=0.8,size=(num_trials*networks,))
-               d['orig'][key] = np.random.uniform(low=0.6,high=0.8,size=(num_trials*networks,))
     return d
 
 data_all = []
 for architecture in architectures:
-    data_all_networks = initialize_dict(architecture, architecture != "ads_jax_ebn" and architecture != "bptt" and architecture != "force" and architecture != "reservoir")
+    data_all_networks = initialize_dict(architecture)
     for network_idx in range(networks):
         # - Load the dictionary
         fp = bp / f"{architecture}{str(network_idx)}_mismatch_analysis_output.json"
@@ -87,9 +82,13 @@ for architecture in architectures:
         for mismatch_std in mismatch_stds:
             for key in local_keys:
                 for trial in range(num_trials):
-                    l = tmp[str(mismatch_std)][trial][key]
-                    data_all_networks['orig'][key].append(l[0])
-                    data_all_networks[str(mismatch_std)][key].append(l[1])
+                    try:
+                        l = tmp[str(mismatch_std)][trial][key]
+                    except:
+                        pass
+                    else:    
+                        data_all_networks['orig'][key].append(l[0])
+                        data_all_networks[str(mismatch_std)][key].append(l[1])
     data_all.append(data_all_networks)
 
 
@@ -109,8 +108,12 @@ for idx_architecture, architecture in enumerate(architectures):
 
         ax = plt.Subplot(fig, inner[idx_std])
 
-        scores_orig = np.array(data_all[idx_architecture]['orig']['final_out_mse'])
-        scores_mism = np.array(data_all[idx_architecture][str(mismatch_std)]['final_out_mse'])
+        index = 'final_out_mse'
+        if(USE_TGT and architecture in ["force","ads_jax_ebn"]):
+            index = 'final_out_mse_tgt'
+
+        scores_orig = np.array(data_all[idx_architecture]['orig'][index])
+        scores_mism = np.array(data_all[idx_architecture][str(mismatch_std)][index])
         # - Compute the median drop in performance
         c_mm = colors_mismatch[idx_std]
         c_outlier = colors_mismatch[-1]
@@ -149,7 +152,7 @@ for idx_architecture, architecture in enumerate(architectures):
         plt.xticks([])
         ax.set_xlim([-1, 1])
 
-        mean_mse = np.mean(np.array(data_all[idx_architecture]['orig']['final_out_mse']))
+        mean_mse = np.mean(np.array(data_all[idx_architecture]['orig'][index]))
         if(idx_std == 0):
             ax.axhline(y=mean_mse, color=c_orig, linestyle="dotted", linewidth=2)
 
@@ -218,7 +221,11 @@ for ax in fig.get_axes():
     ax.spines['right'].set_visible(False)
 
 plt.tight_layout()
-plt.savefig("../Figures/mismatch_comparison.pdf", dpi=1200)
+if(USE_TGT):
+    fname =  "../Figures/mismatch_comparison_mse_vs_target.pdf"
+else:
+    fname = "../Figures/mismatch_comparison.pdf"
+plt.savefig(fname, dpi=1200)
 plt.show(block=True)
 
 # - Statistical analysis of the medians of MSEs
@@ -226,11 +233,13 @@ crossed = np.zeros((len(architectures),len(architectures)))
 print("mismatch \t\t A1/A2 \t\t Median MSE A1 \t Median MSE A2 \t P-Value (Mann-Whitney-U) ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
+        ind_i = "final_out_mse_tgt" if(USE_TGT and architectures[i] in ["force","ads_jax_ebn"]) else "final_out_mse"
+        ind_j = "final_out_mse_tgt" if(USE_TGT and architectures[j] in ["force","ads_jax_ebn"]) else "final_out_mse"
         if(i == j): continue
         if(crossed[i,j] == 1): continue
         for mismatch_std in mismatch_stds:
-            data_a1 = data_all[i][str(mismatch_std)]['final_out_mse']
-            data_a2 = data_all[j][str(mismatch_std)]['final_out_mse']
+            data_a1 = data_all[i][str(mismatch_std)][ind_i]
+            data_a2 = data_all[j][str(mismatch_std)][ind_j]
             
             p_value = stats.median_test(data_a1, data_a2)[1]
             p_value_mw = stats.mannwhitneyu(data_a1, data_a2)[1]
@@ -245,11 +254,13 @@ crossed = np.zeros((len(architectures),len(architectures)))
 print("mismatch : A1/A2 \t\t Std.dev MSE A1 \t Std.dev MSE A2 \t P-Value (Levene) ")
 for i,architecture in enumerate(architectures):
     for j,architecture in enumerate(architectures):
+        ind_i = "final_out_mse_tgt" if(USE_TGT and architectures[i] in ["force","ads_jax_ebn"]) else "final_out_mse"
+        ind_j = "final_out_mse_tgt" if(USE_TGT and architectures[j] in ["force","ads_jax_ebn"]) else "final_out_mse"
         if(i == j): continue
         if(crossed[i,j] == 1): continue
         for mismatch_std in mismatch_stds:
-            data_a1 = data_all[i][str(mismatch_std)]['final_out_mse']
-            data_a2 = data_all[j][str(mismatch_std)]['final_out_mse']
+            data_a1 = data_all[i][str(mismatch_std)][ind_i]
+            data_a2 = data_all[j][str(mismatch_std)][ind_j]
             
             p_value = stats.levene(data_a1, data_a2)[1]
             
@@ -263,9 +274,10 @@ for i,architecture in enumerate(architectures):
 crossed = np.zeros((len(architectures),len(architectures)))
 print("mismatch : \t Arch \t Base med. MSE \t Mism. MSE \t MSE drop% \t P-Value (Mann-Whitney-U) ")
 for i, architecture in enumerate(architectures):
+    ind_i = "final_out_mse_tgt" if(USE_TGT and architectures[i] in ["force","ads_jax_ebn"]) else "final_out_mse"
     for mismatch_std in mismatch_stds:
-        data_orig = data_all[i]['orig']['final_out_mse']
-        data_mismatch = data_all[i][str(mismatch_std)]['final_out_mse']
+        data_orig = data_all[i]['orig'][ind_i]
+        data_mismatch = data_all[i][str(mismatch_std)][ind_i]
         
         p_value = stats.median_test(data_orig, data_mismatch)[1]
         p_value_mw = stats.mannwhitneyu(data_orig, data_mismatch)[1]

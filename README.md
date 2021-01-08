@@ -33,9 +33,6 @@ NOTE:
 - You have to adjust the paths used in both files.
 - By deleting ```Resources/temporal_xor.json``` and then running the script ```figure1.py```, you will retrain the model.
 
-<center>
-<img src=Figures/figure1.png width="500">
-</center>
 
 ## Figure 2
 Execute ```$ python generate_data.py``` and ```$ python plot.py``` to generate the data needed for plotting and to create Figure 2.
@@ -45,9 +42,6 @@ NOTE:
 - Data availability: The model is being trained and validated on data that is not directly available to the community. The core wake-phrase data can be obtained from [here](https://github.com/snipsco/keyword-spotting-research-datasets). The data was augmented with some background noise. If you have filled out the form on the previous link, please contact me for the entire data. This is for research purposes only.
 - After you have the data ```HeySnips``` and ```DEMAND```, navigate to ```path/to/simmba/simmba/SIMMBA/experiments/``` and open ```HeySnipsDEMAND.py``` where you need to adjust the paths.
 
-<center>
-<img src=Figures/figure2.png width="500">
-</center>
 
 ## Robustness
 
@@ -58,10 +52,6 @@ The folder ```discretization/``` contains one sub-folder for each network archit
 Navigate to the folder ```figure3/``` and execute ```python generate_data.py```, which will generate and store the data needed for the figure.
 
 Afterwards execute ```python plot.py``` to generate the figure.
-
-<center>
-<img src=Figures/figure3.png width="500">
-</center>
 
 ### Sudden Neuron Death
 
@@ -77,18 +67,7 @@ The folder contains sub-folders for each architecture. Each sub-folder contains 
 
 The mismatch analysis is carried out for each network instance to ensure statistical correctness and can be carried out by executing ```bash mismatch_analysis.sh``` for each architecture.
 
-<center>
-<img src=Figures/figure4.png width="600">
-</center>
-
 ### Injected Noise
 In this experiment we analyze the robustness to noise injected directly into the membrane potentials for different architectures.
 
 Navigate to the folder ```membranePotentialNoise/<architecture>``` and execute ```bash noise_analysis.sh``` to analyze all network instances.
-
-<center>
-<img src=Figures/membranePotentialNoise.png width="600">
-</center>
-
-## Acknowledgement
-The paper can be found [here](google.com).

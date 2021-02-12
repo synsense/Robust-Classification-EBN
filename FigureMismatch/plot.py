@@ -70,9 +70,9 @@ def plot_dist(ax, tcs, x_label, title, bins=None):
         ax.set_xlabel(x_label)
     ax.set_xlim([-0.001,max(means)+4*max(stds)])
 
-plot_dist(ax11, data["weights_slow"],x_label=r"$W_\textnormal{AMPA} [mV_\textnormal{peak}]$",title=r"$\textbf{a}$", bins=20)
-plot_dist(ax12, data["mem_tc"], x_label=r"$\tau_\textnormal{mem}$ [ms]",title=r"$\textbf{b}$", bins=20)
-plot_dist(ax21, data["weights_fast"], x_label=r"$W_\textnormal{NMDA} [mV_\textnormal{peak}]$",title=r"$\textbf{c}$", bins=20)
+plot_dist(ax11, data["weights_slow"],x_label=r"$W_\textnormal{slow}$, peak (mV)",title=r"$\textbf{a}$", bins=20)
+plot_dist(ax12, data["mem_tc"], x_label=r"$\tau_\textnormal{mem}$ (ms)",title=r"$\textbf{b}$", bins=20)
+plot_dist(ax21, data["weights_fast"], x_label=r"$W_\textnormal{fast}$, peak (mV)",title=r"$\textbf{c}$", bins=20)
 
 def scatter_mm(ax, tcs, color, label):
     fitted_std = []; fitted_means = []; ms = []
@@ -82,23 +82,31 @@ def scatter_mm(ax, tcs, color, label):
         fitted_std.append(std)
         fitted_means.append(mu)
         ms.append(mu / std)
-    m,b,_,_,_ = stats.linregress(fitted_means,fitted_std)
+    
+    m,b,r,_,_ = stats.linregress(fitted_means,fitted_std)
+    print(f"Regression {label}: R = {r}")
+    
     x = np.linspace(min(fitted_means),max(fitted_means),100)
     y = m*x + b 
-    ax22.scatter(fitted_means, fitted_std, c=color, label=label, alpha=0.4)
-    ax22.plot(x,y, color=color)
+    ax.scatter(fitted_means, fitted_std, c=color, label=label, alpha=0.4)
+    ax.plot(x,y, color=color)
     ax.spines['top'].set_visible(False)
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_yticks([2,4,6])
     ax.set_xticks([20,40,60])
-    ax.set_xlabel(r"$\mu$ [ms,mV]")
-    ax.set_ylabel(r"$\sigma$ [ms,mV]")
+    ax.set_xlabel(r"mean value (ms; mV)")
+    ax.set_ylabel(r"std. dev. (ms; mV)")
+    
+    for tick in ax.get_xticklabels():
+        tick.set_fontname("Comic Sans MS")
+    for tick in ax.get_yticklabels():
+        tick.set_fontname("Comic Sans MS")    
     
 scatter_mm(ax22, tau_mems, color="#3262db", label=r"$\tau_\textnormal{mem}$")
-scatter_mm(ax22, weights_slow, color="#db3262", label=r"$W_\textnormal{AMPA}$")
-scatter_mm(ax22, weights_fast, color="#29a624", label=r"$W_\textnormal{NMDA}$")
+scatter_mm(ax22, weights_slow, color="#db3262", label=r"$W_\textnormal{slow}$")
+scatter_mm(ax22, weights_fast, color="#29a624", label=r"$W_\textnormal{fast}$")
 ax22.legend(frameon=False, loc=0, fontsize=7)
 ax22.text(x = 5, y = max(ax22.get_ylim()), s=r"$\textbf{d}$", fontsize=16)
 

@@ -22,7 +22,7 @@ from scipy import stats
 import pathlib as pl
 
 USE_VIOLIN = True
-USE_TGT = False
+USE_TGT = True
 
 # - Change current directory to directory where this file is located
 absolute_path = os.path.abspath(__file__)
